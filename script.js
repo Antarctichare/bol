@@ -30,6 +30,7 @@ function autoSampleColors(ctx) {
 // =========================================================================
 // 피부 패치: 스마트 번짐(주변 피부 픽셀 보간) / 단색
 // =========================================================================
+let eraseScale = 1.15;           // 눈/입을 지울 범위 배율 (박스 대비)
 let skinMode = 'smart';          // 'smart' = 주변 피부 보간, 'solid' = 단색
 let normImgData = null;          // 현재 정규화 이미지의 픽셀 캐시 (rebuild마다 갱신)
 const patchCache = new Map();    // 같은 박스 패치를 레이어마다 다시 계산하지 않기 위한 캐시
@@ -39,91 +40,80 @@ function hexToRgb(hex) {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-// 가장자리 샘플 배열의 빈칸(null)을 가까운 값으로 채우고 살짝 평균내어 줄무늬를 줄임
-function smoothEdge(arr) {
-  const n = arr.length;
-  const valid = [];
-  arr.forEach((v, i) => { if (v) valid.push(i); });
-  if (!valid.length) return arr;
-  const filled = arr.map((v, i) => {
-    if (v) return v;
-    let best = valid[0];
-    for (const j of valid) if (Math.abs(j - i) < Math.abs(best - i)) best = j;
-    return arr[best];
-  });
-  return filled.map((_, i) => {
-    let r = 0, g = 0, b = 0, c = 0;
-    for (let j = Math.max(0, i - 2); j <= Math.min(n - 1, i + 2); j++) {
-      r += filled[j][0]; g += filled[j][1]; b += filled[j][2]; c++;
-    }
-    return [r / c, g / c, b / c];
-  });
-}
-
-// 순수 계산 함수: 박스 바깥 4변의 피부 픽셀을 읽어 내부를 매끄럽게 보간한 RGBA 패치를 반환
+// 순수 계산 함수: 박스 바깥 고리(ring)의 피부 픽셀을 경계값으로 삼아, 박스 안쪽을 라플라스 방정식으로
+// 부드럽게 메운 RGBA 패치를 반환한다. (가장자리 4변 단순 보간과 달리 줄무늬 없이 볼터치/그림자가 자연스럽게 이어짐)
+//  - 고리 중 윤곽선·머리카락처럼 피부색과 많이 다른 픽셀은 경계값에서 제외(미지수로 취급)해서 번지지 않게 함
 function computeSmartPatch(img, W, H, cx, cy, w, h, skinRGB) {
-  const F = 2;                    // 바깥쪽으로 번지는 가장자리 폭(px)
-  const GAP = 2, BAND = 4;        // 박스에서 2px 떨어진 곳부터 4px 두께로 샘플링
-  const TOL = 90;                 // 기준 피부색과 이 거리 이상 다른 픽셀(윤곽선/머리카락)은 제외
+  const F = 2;                    // 바깥쪽으로 서서히 투명해지는 가장자리 폭(px)
+  const K = 7;                    // 경계값을 읽어오는 고리 두께(px)
+  const TOLD = 150;               // 기준 피부색과의 색거리 허용치 (볼터치는 포함, 진한 선/머리카락은 제외)
   const x0 = Math.floor(cx - w / 2), x1 = Math.ceil(cx + w / 2);
   const y0 = Math.floor(cy - h / 2), y1 = Math.ceil(cy + h / 2);
   const rw = Math.max(1, x1 - x0), rh = Math.max(1, y1 - y0);
+  const skinL = 0.299 * skinRGB[0] + 0.587 * skinRGB[1] + 0.114 * skinRGB[2];
 
-  const sample = (pts) => {
-    let r = 0, g = 0, b = 0, n = 0;
-    for (const [x, y] of pts) {
-      if (x < 0 || y < 0 || x >= W || y >= H) continue;
-      const i = (y * W + x) * 4;
-      if (img[i + 3] < 200) continue;
-      if (Math.hypot(img[i] - skinRGB[0], img[i + 1] - skinRGB[1], img[i + 2] - skinRGB[2]) > TOL) continue;
-      r += img[i]; g += img[i + 1]; b += img[i + 2]; n++;
+  // 작업 창 = 박스 + 고리 (이미지 밖은 제외)
+  const wx0 = Math.max(0, x0 - K), wy0 = Math.max(0, y0 - K);
+  const wx1 = Math.min(W, x1 + K), wy1 = Math.min(H, y1 + K);
+  const ww = wx1 - wx0, wh = wy1 - wy0;
+  const n = ww * wh;
+  const ch = [new Float32Array(n), new Float32Array(n), new Float32Array(n)];
+  const known = new Uint8Array(n);
+  let kc = 0, mr = 0, mg = 0, mb = 0;
+  for (let y = 0; y < wh; y++) {
+    for (let x = 0; x < ww; x++) {
+      const gx = wx0 + x, gy = wy0 + y, o = y * ww + x, i = (gy * W + gx) * 4;
+      const inside = gx >= x0 && gx < x1 && gy >= y0 && gy < y1;
+      if (!inside && img[i + 3] >= 200) {
+        const lum = 0.299 * img[i] + 0.587 * img[i + 1] + 0.114 * img[i + 2];
+        // 피부/볼터치처럼 밝고 따뜻한 픽셀만 경계값으로 사용 (앞머리 그림자·윤곽선·눈 가장자리는 제외)
+        if (Math.hypot(img[i] - skinRGB[0], img[i + 1] - skinRGB[1], img[i + 2] - skinRGB[2]) < TOLD && lum > 0.76 * skinL && (img[i + 2] - img[i]) < 20) {
+          known[o] = 1; ch[0][o] = img[i]; ch[1][o] = img[i + 1]; ch[2][o] = img[i + 2];
+          kc++; mr += img[i]; mg += img[i + 1]; mb += img[i + 2];
+        }
+      }
     }
-    return n ? [r / n, g / n, b / n] : null;
-  };
-  const edge = (len, at) => {
-    const arr = [];
-    for (let i = 0; i < len; i++) {
-      const pts = [];
-      for (let k = GAP; k < GAP + BAND; k++) pts.push(at(i, k));
-      arr.push(sample(pts));
-    }
-    return smoothEdge(arr);
-  };
-  const Le = edge(rh, (i, k) => [x0 - k, y0 + i]);
-  const Re = edge(rh, (i, k) => [x1 - 1 + k, y0 + i]);
-  const Te = edge(rw, (i, k) => [x0 + i, y0 - k]);
-  const Be = edge(rw, (i, k) => [x0 + i, y1 - 1 + k]);
+  }
+  const init = kc ? [mr / kc, mg / kc, mb / kc] : skinRGB;
+  for (let o = 0; o < n; o++) if (!known[o]) { ch[0][o] = init[0]; ch[1][o] = init[1]; ch[2][o] = init[2]; }
 
-  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  // SOR(과이완) 반복: 미지수 픽셀을 이웃 평균으로 수렴시킴. 창 가장자리는 이웃이 없는 쪽을 무시(Neumann).
+  if (kc) {
+    const dim = Math.max(ww, wh);
+    const omega = 2 / (1 + Math.sin(Math.PI / dim));
+    const iters = Math.max(60, Math.min(300, dim * 3));
+    for (let it = 0; it < iters; it++) {
+      for (let y = 0; y < wh; y++) {
+        for (let x = 0; x < ww; x++) {
+          const o = y * ww + x; if (known[o]) continue;
+          let c = 0, s0 = 0, s1 = 0, s2 = 0;
+          if (x > 0)      { const q = o - 1;  s0 += ch[0][q]; s1 += ch[1][q]; s2 += ch[2][q]; c++; }
+          if (x < ww - 1) { const q = o + 1;  s0 += ch[0][q]; s1 += ch[1][q]; s2 += ch[2][q]; c++; }
+          if (y > 0)      { const q = o - ww; s0 += ch[0][q]; s1 += ch[1][q]; s2 += ch[2][q]; c++; }
+          if (y < wh - 1) { const q = o + ww; s0 += ch[0][q]; s1 += ch[1][q]; s2 += ch[2][q]; c++; }
+          ch[0][o] += omega * (s0 / c - ch[0][o]);
+          ch[1][o] += omega * (s1 / c - ch[1][o]);
+          ch[2][o] += omega * (s2 / c - ch[2][o]);
+        }
+      }
+    }
+  }
+
+  // 패치 = 박스 + F 여백. 둥근 사각형 마스크로 안쪽 100%, 바깥 F px 동안 서서히 투명
   const pw = rw + F * 2, ph = rh + F * 2;
   const out = new Uint8ClampedArray(pw * ph * 4);
   const rad = Math.min(w, h) * 0.35;
-  const wH = rh * rh, wV = rw * rw; // 짧은 방향(더 가까운 가장자리)의 보간을 더 신뢰
-
   for (let py = 0; py < ph; py++) {
     for (let px = 0; px < pw; px++) {
-      const gx = x0 - F + px + 0.5, gy = y0 - F + py + 0.5;
-      // 둥근 사각형 마스크 (안쪽 100%, 바깥쪽 F px 동안 서서히 투명)
-      const qx = Math.abs(gx - cx) - (w / 2 - rad), qy = Math.abs(gy - cy) - (h / 2 - rad);
+      const gx = x0 - F + px, gy = y0 - F + py;
+      const fx = gx + 0.5, fy = gy + 0.5;
+      const qx = Math.abs(fx - cx) - (w / 2 - rad), qy = Math.abs(fy - cy) - (h / 2 - rad);
       const d = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - rad;
       const a = d <= 0 ? 1 : Math.max(0, 1 - d / F);
       if (a <= 0) continue;
-
-      const ix = Math.min(rw - 1, Math.max(0, Math.floor(gx - x0)));
-      const iy = Math.min(rh - 1, Math.max(0, Math.floor(gy - y0)));
-      const tx = (ix + 0.5) / rw, ty = (iy + 0.5) / rh;
-      const Lc = Le[iy], Rc = Re[iy], Tc = Te[ix], Bc = Be[ix];
-      const hc = (Lc && Rc) ? mix(Lc, Rc, tx) : (Lc || Rc);
-      const vc = (Tc && Bc) ? mix(Tc, Bc, ty) : (Tc || Bc);
-      let c;
-      if (hc && vc) {
-        const s = wH + wV;
-        c = [0, 1, 2].map(k => (hc[k] * wH + vc[k] * wV) / s);
-      } else {
-        c = hc || vc || skinRGB;
-      }
-      const o = (py * pw + px) * 4;
-      out[o] = c[0]; out[o + 1] = c[1]; out[o + 2] = c[2]; out[o + 3] = Math.round(a * 255);
+      const lx = Math.min(ww - 1, Math.max(0, gx - wx0)), ly = Math.min(wh - 1, Math.max(0, gy - wy0));
+      const o = ly * ww + lx, k = (py * pw + px) * 4;
+      out[k] = ch[0][o]; out[k + 1] = ch[1][o]; out[k + 2] = ch[2][o]; out[k + 3] = Math.round(a * 255);
     }
   }
   return { data: out, pw, ph, ox: x0 - F, oy: y0 - F };
@@ -198,16 +188,45 @@ function rebuildAllParts(autoSample = false) {
   const R = toPx(rigBoxes.eyeR);
   const M = toPx(rigBoxes.mouth);
 
+  // 지움/크롭 영역: 박스를 eraseScale배로 키운 사각형 (베이스에서 지우는 범위 = 눈/입 레이어로 따는 범위)
+  const grow = (b, k) => ({ cx: b.cx, cy: b.cy, w: b.w * k, h: b.h * k, left: b.cx - b.w * k / 2, top: b.cy - b.h * k / 2 });
+  const Le = grow(L, eraseScale), Re = grow(R, eraseScale), Me = grow(M, eraseScale);
+
+  // 원본에서 사각형을 오려내되 가장자리 2px를 서서히 투명하게 만듦 → 깨끗한 베이스 위에 이음매 없이 얹힘
+  const drawSoftCrop = (ctx, b, feather = 2) => {
+    const x0 = Math.max(0, Math.floor(b.left)), y0 = Math.max(0, Math.floor(b.top));
+    const x1 = Math.min(CANV_SIZE, Math.ceil(b.left + b.w)), y1 = Math.min(CANV_SIZE, Math.ceil(b.top + b.h));
+    const w = x1 - x0, h = y1 - y0;
+    if (w <= 0 || h <= 0) return;
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const cx = c.getContext('2d');
+    cx.drawImage(normCanvas, x0, y0, w, h, 0, 0, w, h);
+    const d = cx.getImageData(0, 0, w, h);
+    const f = Math.max(0.5, Math.min(feather, w / 2, h / 2));
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const dist = Math.min(x + 0.5, w - x - 0.5, y + 0.5, h - y - 0.5);
+        const o = (y * w + x) * 4 + 3;
+        d.data[o] = d.data[o] * Math.min(1, dist / f);
+      }
+    }
+    cx.putImageData(d, 0, 0);
+    ctx.drawImage(c, x0, y0);
+  };
+
   // 2) 에디터 프리뷰 캔버스 갱신
   drawEditorCanvas();
 
   // 3) [베이스 레이어] 생성:
-  // 눈은 평소(뜬 상태)에 원본 퀄리티가 100% 유지되도록 지우지 않고, '입 영역'만 정밀하게 피부색으로 지움!
+  // 눈 2개와 입을 주변 피부 픽셀로 메워 '이목구비가 없는 깨끗한 얼굴'을 만든다.
+  // 표정별 눈/입은 모두 이 위에 얹기만 하므로, 표정을 바꿔도 배경과 어긋나는 패치가 생기지 않는다.
   const baseC = document.createElement('canvas');
   baseC.width = CANV_SIZE; baseC.height = CANV_SIZE;
   const bCtx = baseC.getContext('2d');
   bCtx.drawImage(normCanvas, 0, 0);
-  fillSmoothSkinPatch(bCtx, M.cx, M.cy, M.w, M.h, 1.08);
+  fillSmoothSkinPatch(bCtx, L.cx, L.cy, L.w, L.h, eraseScale);
+  fillSmoothSkinPatch(bCtx, R.cx, R.cy, R.w, R.h, eraseScale);
+  fillSmoothSkinPatch(bCtx, M.cx, M.cy, M.w, M.h, eraseScale);
   GENERATED.base = baseC.toDataURL('image/png');
 
   // 4) [눈 레이어] 생성기
@@ -223,17 +242,14 @@ function rebuildAllParts(autoSample = false) {
     return c.toDataURL('image/png');
   };
 
-  // 4-1. 기본 뜬 눈: 원본 눈을 그대로 切り抜き(크롭)하여 말할 때 살짝 들썩일 수 있게 분리
-  const openEyesURL = createEyeLayer((ctx, l, r) => {
-    ctx.drawImage(normCanvas, l.left, l.top, l.w, l.h, l.left, l.top, l.w, l.h);
-    ctx.drawImage(normCanvas, r.left, r.top, r.w, r.h, r.left, r.top, r.w, r.h);
+  // 4-1. 기본 뜬 눈: 원본 눈을 그대로 오려내어(가장자리 부드럽게) 말할 때 살짝 들썩일 수 있게 분리
+  const openEyesURL = createEyeLayer((ctx) => {
+    drawSoftCrop(ctx, Le);
+    drawSoftCrop(ctx, Re);
   });
 
   // 4-2. 자연스러운 감은 눈 (피부색 패치로 눈동자를 덮고 + 트릭컬 특유의 도톰한 감은 속눈썹 렌더링)
   const closedEyesURL = createEyeLayer((ctx, l, r) => {
-    fillSmoothSkinPatch(ctx, l.cx, l.cy, l.w, l.h, 1.06);
-    fillSmoothSkinPatch(ctx, r.cx, r.cy, r.w, r.h, 1.06);
-
     const drawClosedArc = (eye) => {
       const yPos = eye.cy + eye.h * 0.12; // 눈꺼풀이 아래로 내려앉은 위치
       const halfW = eye.w * 0.44;
@@ -258,9 +274,6 @@ function rebuildAllParts(autoSample = false) {
 
   // 4-3. 해피 눈 (^ ^ 눈웃음)
   const happyEyesURL = createEyeLayer((ctx, l, r) => {
-    fillSmoothSkinPatch(ctx, l.cx, l.cy, l.w, l.h, 1.06);
-    fillSmoothSkinPatch(ctx, r.cx, r.cy, r.w, r.h, 1.06);
-
     const drawHappyArc = (eye) => {
       const halfW = eye.w * 0.42;
       ctx.lineWidth = Math.max(3.2, eye.h * 0.20);
@@ -275,9 +288,6 @@ function rebuildAllParts(autoSample = false) {
 
   // 4-4. 당황 눈 (하얀 눈자위 + 작은 동공)
   const shockEyesURL = createEyeLayer((ctx, l, r) => {
-    fillSmoothSkinPatch(ctx, l.cx, l.cy, l.w, l.h, 1.06);
-    fillSmoothSkinPatch(ctx, r.cx, r.cy, r.w, r.h, 1.06);
-
     const drawShockEye = (eye) => {
       ctx.lineWidth = Math.max(2.5, eye.h * 0.14);
       ctx.fillStyle = '#ffffff';
@@ -294,17 +304,22 @@ function rebuildAllParts(autoSample = false) {
     drawShockEye(r);
   });
 
-  // 4-5. 버럭 눈 (원본 눈 + 사선 눈썹)
+  // 4-5. 버럭 눈 (원본 눈 위쪽 모서리를 잘라내 매서운 눈매 + 사선 눈썹)
+  //       잘라낸 자리는 피부색을 칠하지 않고 비워두므로, 깨끗한 베이스가 그대로 비쳐 보인다.
   const angryEyesURL = createEyeLayer((ctx, l, r) => {
-    ctx.drawImage(normCanvas, l.left, l.top, l.w, l.h, l.left, l.top, l.w, l.h);
-    ctx.drawImage(normCanvas, r.left, r.top, r.w, r.h, r.left, r.top, r.w, r.h);
-
-    // 눈 위쪽을 피부색으로 살짝 깎아 매서운 눈매 연출
-    ctx.fillStyle = skinColor;
-    ctx.beginPath();
-    ctx.moveTo(l.left, l.top); ctx.lineTo(l.left + l.w, l.top); ctx.lineTo(l.left + l.w, l.top + l.h*0.35); ctx.closePath();
-    ctx.moveTo(r.left, r.top); ctx.lineTo(r.left + r.w, r.top); ctx.lineTo(r.left, r.top + r.h*0.35); ctx.closePath();
-    ctx.fill();
+    const cutEye = (b, isLeft) => {
+      const tmp = document.createElement('canvas'); tmp.width = CANV_SIZE; tmp.height = CANV_SIZE;
+      const t = tmp.getContext('2d');
+      drawSoftCrop(t, b);
+      t.globalCompositeOperation = 'destination-out';
+      t.beginPath();
+      if (isLeft) { t.moveTo(b.left - 1, b.top - 1); t.lineTo(b.left + b.w + 1, b.top - 1); t.lineTo(b.left + b.w + 1, b.top + b.h * 0.35); }
+      else        { t.moveTo(b.left - 1, b.top - 1); t.lineTo(b.left + b.w + 1, b.top - 1); t.lineTo(b.left - 1, b.top + b.h * 0.35); }
+      t.closePath(); t.fill();
+      ctx.drawImage(tmp, 0, 0);
+    };
+    cutEye(Le, true);
+    cutEye(Re, false);
 
     ctx.lineWidth = Math.max(3.5, l.h * 0.18);
     ctx.beginPath();
@@ -329,7 +344,7 @@ function rebuildAllParts(autoSample = false) {
     let m0;
     if (mood === 'normal') {
       m0 = makeM((ctx) => {
-        ctx.drawImage(normCanvas, M.left, M.top, M.w, M.h, M.left, M.top, M.w, M.h);
+        drawSoftCrop(ctx, Me);
       });
     } else {
       m0 = makeM((ctx, x, y, w, h) => {
@@ -672,6 +687,12 @@ function setSkinColor(hex) {
   document.getElementById('skin-picker').value = hex;
   rebuildAllParts(false);
 }
+
+document.getElementById('erase-scale').addEventListener('input', (e) => {
+  eraseScale = Number(e.target.value) / 100;
+  document.getElementById('erase-val').textContent = e.target.value + '%';
+  rebuildAllParts(false);
+});
 
 document.getElementById('skin-mode').addEventListener('change', (e) => {
   skinMode = e.target.value;

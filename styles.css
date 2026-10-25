@@ -474,3 +474,7 @@ input[type="color"] {
 .part-actions button:hover { background: #4a4a68; }
 
 .detect-row { display: flex; gap: 6px; margin: 8px 0 2px; }
+
+.erase-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #ccc; margin: 4px 0 8px; }
+.erase-row input[type="range"] { flex: 1; }
+.erase-row span { width: 36px; text-align: right; color: #a29bfe; }

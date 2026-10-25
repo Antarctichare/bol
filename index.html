@@ -132,6 +132,11 @@
           <button id="screen-eyedrop-btn" class="mini-btn" style="display:none;" title="화면 어디서든 색 추출 (Chrome/Edge)">🖥️ 화면 스포이드</button>
           <span id="eyedrop-swatch" class="swatch" style="display:none;"></span>
         </div>
+        <div class="erase-row">
+          <label for="erase-scale" title="베이스에서 눈/입을 지우는 범위. 눈 가장자리 윤곽선이 남아 보이면 키우세요">지움 범위</label>
+          <input type="range" id="erase-scale" min="100" max="170" step="1" value="115">
+          <span id="erase-val">115%</span>
+        </div>
         <div id="tool-hint" class="tool-hint"></div>
 
         <!-- 8개 파츠 직접 업로드 -->
