@@ -615,6 +615,53 @@ document.getElementById('line-picker').addEventListener('input', (e) => {
 });
 
 // =========================================================================
+// 눈·입 자동 감지 (detect.js의 detectFaceFeatures 사용)
+// =========================================================================
+const detectHintEl = document.getElementById('detect-hint');
+const undoDetectBtn = document.getElementById('undo-detect-btn');
+let beforeDetect = null;   // 되돌리기용 { boxes, skin }
+
+function runAutoDetect() {
+  if (!normImgData) return false;
+  const res = detectFaceFeatures(normImgData.data, CANV_SIZE, CANV_SIZE);
+  if (!res.ok) {
+    detectHintEl.textContent = '자동 감지 실패: ' + res.reason + ' 현재 박스 위치를 유지했어요. 박스를 직접 맞춰 주세요.';
+    return false;
+  }
+  beforeDetect = { boxes: JSON.parse(JSON.stringify(rigBoxes)), skin: skinColor };
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  ['eyeL', 'eyeR', 'mouth'].forEach(k => {
+    const b = res[k];
+    rigBoxes[k].x = clamp(b.x, 2, 98);
+    rigBoxes[k].y = clamp(b.y, 2, 98);
+    rigBoxes[k].w = clamp(b.w, 0.5, 60);
+    rigBoxes[k].h = clamp(b.h, 0.5, 60);
+  });
+  skinColor = rgbToHex(res.skin[0], res.skin[1], res.skin[2]);
+  document.getElementById('skin-picker').value = skinColor;
+  syncSlidersFromBox();
+  rebuildAllParts(false);
+  undoDetectBtn.style.display = '';
+  detectHintEl.textContent = res.mouthGuessed
+    ? '눈 2개는 찾았지만 입은 찾지 못해 추정 위치에 뒀어요. 입 박스만 직접 맞춰 주세요. (피부색도 자동 갱신됨)'
+    : '눈 2개와 입을 찾았어요. 어긋나 있으면 박스를 드래그해서 보정하세요. (피부색도 자동 갱신됨)';
+  return true;
+}
+
+document.getElementById('auto-detect-btn').addEventListener('click', runAutoDetect);
+undoDetectBtn.addEventListener('click', () => {
+  if (!beforeDetect) return;
+  ['eyeL', 'eyeR', 'mouth'].forEach(k => Object.assign(rigBoxes[k], beforeDetect.boxes[k]));
+  skinColor = beforeDetect.skin;
+  document.getElementById('skin-picker').value = skinColor;
+  beforeDetect = null;
+  undoDetectBtn.style.display = 'none';
+  syncSlidersFromBox();
+  rebuildAllParts(false);
+  detectHintEl.textContent = '감지 전 위치로 되돌렸어요.';
+});
+
+// =========================================================================
 // 피부색 도구: 스마트 번짐 모드 / 스포이드
 // =========================================================================
 const hintEl = document.getElementById('tool-hint');
@@ -952,6 +999,7 @@ function handleImageFile(file) {
       sourceImage = img;
       Object.keys(customParts).forEach(k => delete customParts[k]);
       rebuildAllParts(true);
+      runAutoDetect();
     };
     img.src = e.target.result;
   };

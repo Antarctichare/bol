@@ -472,3 +472,5 @@ input[type="color"] {
   cursor: pointer;
 }
 .part-actions button:hover { background: #4a4a68; }
+
+.detect-row { display: flex; gap: 6px; margin: 8px 0 2px; }

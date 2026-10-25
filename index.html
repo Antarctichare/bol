@@ -61,6 +61,13 @@
           <div style="font-weight:bold; font-size:12px; color:#a29bfe;">📂 트릭컬 캐릭터 이미지 업로드 (클릭 또는 드래그)</div>
         </label>
 
+        <!-- 눈/입 위치 자동 감지 -->
+        <div class="detect-row">
+          <button id="auto-detect-btn" class="mini-btn" title="피부 영역을 찾고 그 안의 눈 2개·입 1개 위치를 자동으로 맞춥니다">🎯 눈·입 자동 감지</button>
+          <button id="undo-detect-btn" class="mini-btn" style="display:none;">↶ 감지 전으로</button>
+        </div>
+        <div id="detect-hint" class="tool-hint"></div>
+
         <div class="canvas-legend">
           <span><i class="legend-dot" style="background:#0984e3;"></i>왼눈(L)</span>
           <span><i class="legend-dot" style="background:#00b894;"></i>오른눈(R)</span>
@@ -187,6 +194,7 @@
   </div>
 
   <script src="data.js"></script>
+  <script src="detect.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
