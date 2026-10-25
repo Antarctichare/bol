@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Trickcal Precision PNGTuber Studio V2</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-transparent">
+
+  <div id="toast">방송 모드 켜짐 (복귀: H 키 또는 아바타 더블클릭)</div>
+
+  <div class="workspace">
+    <!-- 좌측: 아바타 라이브 스테이지 -->
+    <div class="stage-card">
+      <div class="avatar-container" id="avatar-box" title="더블클릭하면 방송 모드로 전환됩니다">
+        <div class="avatar-breathe" id="avatar">
+          <img id="part-base"  class="layer layer-base"  alt="base">
+          <img id="part-eyes"  class="layer layer-eyes"  alt="eyes">
+          <img id="part-mouth" class="layer layer-mouth" alt="mouth">
+          <img id="part-fx"    class="layer layer-fx"    alt="fx">
+        </div>
+      </div>
+
+      <div class="studio-ui" style="display:flex; flex-direction:column; align-items:center;">
+        <div class="expression-bar">
+          <button class="exp-btn active" data-exp="normal" onclick="setExpression('normal')">
+            <span>🙂 기본</span><span class="key-hint">Key 1</span>
+          </button>
+          <button class="exp-btn" data-exp="happy" onclick="setExpression('happy')">
+            <span>😆 해피</span><span class="key-hint">Key 2</span>
+          </button>
+          <button class="exp-btn" data-exp="shock" onclick="setExpression('shock')">
+            <span>😰 당황</span><span class="key-hint">Key 3</span>
+          </button>
+          <button class="exp-btn" data-exp="angry" onclick="setExpression('angry')">
+            <span>💢 버럭</span><span class="key-hint">Key 4</span>
+          </button>
+        </div>
+
+        <!-- 클릭해서 입 모양을 미리 테스트해볼 수 있는 배지 -->
+        <div class="state-badge" title="클릭하면 해당 입 모양을 미리 볼 수 있습니다">
+          <div class="step-dot active" id="dot-0" onclick="previewMouthStep(0)">0. 닫힘</div>
+          <div class="step-dot" id="dot-1" onclick="previewMouthStep(1)">1. 작게</div>
+          <div class="step-dot" id="dot-2" onclick="previewMouthStep(2)">2. 보통</div>
+          <div class="step-dot" id="dot-3" onclick="previewMouthStep(3)">3. 크게</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 우측: 정밀 파츠 분할기 & 마이크 설정 -->
+    <div class="studio-panel studio-ui">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('rig')">🎯 1. 정밀 파츠 에디터</button>
+        <button class="tab-btn" onclick="switchTab('mic')">🎙️ 2. 마이크 & 방송 설정</button>
+      </div>
+
+      <!-- [탭 1] 마우스 드래그 & 무제한 미세조정 에디터 -->
+      <div id="tab-rig" class="tab-content active">
+        <label class="drop-zone" id="drop-zone">
+          <input type="file" id="file-input" accept="image/png,image/webp,image/jpeg">
+          <div style="font-weight:bold; font-size:12px; color:#a29bfe;">📂 트릭컬 캐릭터 이미지 업로드 (클릭 또는 드래그)</div>
+        </label>
+
+        <div class="canvas-legend">
+          <span><i class="legend-dot" style="background:#0984e3;"></i>왼눈(L)</span>
+          <span><i class="legend-dot" style="background:#00b894;"></i>오른눈(R)</span>
+          <span><i class="legend-dot" style="background:#ff7675;"></i>입(M)</span>
+          <span style="color:#888;">※ 박스 드래그 이동 / 우측하단 점 크기조절</span>
+        </div>
+
+        <!-- 마우스로 직접 박스를 옮기고 크기를 조절하는 캔버스 -->
+        <div class="rig-editor-container">
+          <canvas id="rig-canvas" width="400" height="400"></canvas>
+        </div>
+
+        <!-- 파츠 선택 탭 (각 파츠의 X, Y, W, H 완전 독립) -->
+        <div class="part-selector">
+          <button class="part-sel-btn active" data-part="eyeL" onclick="selectPart('eyeL')">🔵 왼쪽 눈 (L)</button>
+          <button class="part-sel-btn" data-part="eyeR" onclick="selectPart('eyeR')">🟢 오른쪽 눈 (R)</button>
+          <button class="part-sel-btn" data-part="mouth" onclick="selectPart('mouth')">🔴 입 (Mouth)</button>
+        </div>
+
+        <!-- 선택된 파츠의 무제한 미세 조정 (최소 크기 0.5%까지 허용) -->
+        <div class="fine-tune-box">
+          <div class="tune-grid">
+            <div class="tune-row">
+              <div class="tune-header"><span>가로 위치 (X %)</span><input type="number" id="num-x" class="num-input" step="0.2" min="0" max="100"></div>
+              <input type="range" id="sl-x" min="0" max="100" step="0.2">
+            </div>
+            <div class="tune-row">
+              <div class="tune-header"><span>세로 위치 (Y %)</span><input type="number" id="num-y" class="num-input" step="0.2" min="0" max="100"></div>
+              <input type="range" id="sl-y" min="0" max="100" step="0.2">
+            </div>
+            <div class="tune-row">
+              <div class="tune-header"><span>가로 폭 (W %)</span><input type="number" id="num-w" class="num-input" step="0.2" min="0.5" max="60"></div>
+              <input type="range" id="sl-w" min="0.5" max="45" step="0.2">
+            </div>
+            <div class="tune-row">
+              <div class="tune-header"><span>세로 높이 (H %)</span><input type="number" id="num-h" class="num-input" step="0.2" min="0.5" max="60"></div>
+              <input type="range" id="sl-h" min="0.5" max="45" step="0.2">
+            </div>
+          </div>
+        </div>
+
+        <!-- 피부색 / 선색상 & 눈 깜빡임 즉시 테스트 -->
+        <div class="color-bar">
+          <div class="color-group">
+            <input type="color" id="skin-picker" value="#fff1eb" title="피부색 (눈/입 덮기용)">
+            <span>피부색</span>
+            <input type="color" id="line-picker" value="#463239" title="선/속눈썹 색상" style="margin-left:6px;">
+            <span>선색상</span>
+          </div>
+          <button id="test-blink-btn" style="background:#3a3a52; color:#fff; border:none; padding:5px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold;">
+            👁️ 눈감기 상태 고정 테스트
+          </button>
+        </div>
+
+        <!-- 피부 패치 방식 & 스포이드 -->
+        <div class="skin-tools">
+          <select id="skin-mode" title="눈/입을 덮을 때 피부를 칠하는 방식">
+            <option value="smart">🪄 스마트 번짐 (주변 피부 보간)</option>
+            <option value="solid">■ 단색 채우기</option>
+          </select>
+          <button id="eyedrop-btn" class="mini-btn" title="캔버스의 피부 부분을 클릭해 피부색 추출">💧 스포이드</button>
+          <button id="screen-eyedrop-btn" class="mini-btn" style="display:none;" title="화면 어디서든 색 추출 (Chrome/Edge)">🖥️ 화면 스포이드</button>
+          <span id="eyedrop-swatch" class="swatch" style="display:none;"></span>
+        </div>
+        <div id="tool-hint" class="tool-hint"></div>
+
+        <!-- 8개 파츠 직접 업로드 -->
+        <div class="parts-tools">
+          <button id="bulk-upload-btn" class="mini-btn" title="파일명이 01~08로 시작하면 해당 슬롯에 자동 배정">📤 여러 장 한번에 업로드</button>
+          <button id="reset-custom-btn" class="mini-btn">↺ 업로드 초기화</button>
+          <input type="file" id="bulk-input" accept="image/png,image/webp,image/jpeg" multiple hidden>
+        </div>
+        <div class="parts-export-grid" id="export-grid"></div>
+      </div>
+
+      <!-- [탭 2] 마이크 & OBS 방송 컨트롤 -->
+      <div id="tab-mic" class="tab-content">
+        <div class="btn-row">
+          <button id="start-btn" class="btn btn-green">🎙️ 마이크 연결 시작</button>
+          <button class="btn btn-orange" onclick="toggleStreamMode()">📺 방송 모드 (H)</button>
+        </div>
+
+        <div class="control-row">
+          <div class="label-flex">
+            <span>방송 모드 배경색</span>
+            <select id="bg-select" style="background:#161622; color:#fff; border:1px solid #444; padding:5px 8px; border-radius:6px; font-size:12px;">
+              <option value="bg-transparent">투명 (OBS 브라우저 소스용)</option>
+              <option value="bg-green">크로마키 그린 (#00FF00)</option>
+              <option value="bg-blue">크로마키 블루 (#0000FF)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="control-row">
+          <div class="label-flex">
+            <span>실시간 음성 에너지 (RMS)</span>
+            <span id="vol-num">0%</span>
+          </div>
+          <div class="meter-box">
+            <div class="meter-bar" id="volume-bar"></div>
+            <div class="marker marker-base" id="line-1" style="left: 15%;"></div>
+            <div class="marker marker-sub" id="line-2" style="left: 38%;"></div>
+            <div class="marker marker-sub" id="line-3" style="left: 65%;"></div>
+          </div>
+        </div>
+
+        <div class="control-row">
+          <div class="label-flex">
+            <label for="threshold-slider">노이즈 컷 (최소 반응 기준선)</label>
+            <span id="threshold-val">15%</span>
+          </div>
+          <input type="range" id="threshold-slider" min="2" max="60" value="15">
+        </div>
+
+        <div class="control-row">
+          <div class="label-flex">
+            <label for="gain-slider">마이크 입력 증폭</label>
+            <span id="gain-val">1.0x</span>
+          </div>
+          <input type="range" id="gain-slider" min="0.2" max="3.0" step="0.1" value="1.0">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
