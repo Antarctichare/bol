@@ -8,8 +8,8 @@
     console.error("[스무고개] window.APX가 비어 있습니다. data.js 로드 순서/경로를 확인하세요.");
   }
 
-  // pe: 성격 코드 (0~4가 각각 27명 안팎으로 고르게 분포 → 성격 값으로 판단)
-  const PERSONALITY = { 0: "순수", 1: "냉정", 2: "광기", 3: "활발", 4: "우울" };
+  // pe: 성격 코드 (나무위키 성격별 목록과 135명 전원 일치 확인)
+  const PERSONALITY = { 0: "순수", 1: "냉정", 2: "광기", 3: "활발", 4: "우울", 5: "공명" };
 
   window.APOSTLE_DB = Object.keys(rawAPX).map(function (key) {
     const c = rawAPX[key];
@@ -18,11 +18,11 @@
       name: c.n || "이름없음",
       personality: PERSONALITY[c.pe] || "",
       // 데이터에 없는 항목은 빈 값으로 둡니다 (index.html이 빈 값 힌트는 자동 제외)
-      race: "",
+      race: c.r || "",
       row: "",
       role: "",
       attackType: c.at === 1 ? "물리" : c.at === 2 ? "마법" : "",
-      grade: "",
+      grade: c.gr || "",
       weapon: c.t || "",          // 사도 칭호
       favFood: "",
       hateFood: "",
