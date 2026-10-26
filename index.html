@@ -7,7 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
   
-  <!-- 기존 계산기 데이터 및 브릿지 파일 순서대로 로드 -->
+  <!-- 데이터 파일 → 변환 파일 순서대로 로드 -->
   <script src="./data.js"></script>
   <script src="./apostles.js"></script>
 
@@ -82,7 +82,37 @@
 
   <!-- 메인 컨텐츠 -->
   <main class="flex-1 max-w-[1000px] w-full mx-auto px-4 py-6">
-    <div class="card-surface rounded-2xl p-4 sm:p-6 flex flex-col gap-5">
+    <!-- 모드 선택 화면 -->
+    <section id="mode-select" class="card-surface rounded-2xl p-6 sm:p-10 flex flex-col items-center gap-6 text-center">
+      <div class="flex flex-col items-center gap-2">
+        <div class="w-12 h-12 rounded-2xl bg-violet-600 flex items-center justify-center text-white font-black text-2xl shadow-sm">T</div>
+        <h1 class="text-2xl font-black text-gray-900">사도 맞히기</h1>
+        <p class="text-sm text-gray-500 font-medium">힌트를 적게 열수록 높은 점수! 모드를 선택하세요.</p>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-3 w-full max-w-xl">
+        <button id="mode-five-btn" type="button" class="hint-btn flex flex-col items-center gap-1.5 px-4 py-6 rounded-2xl bg-white border-2 border-violet-200 cursor-pointer">
+          <span class="text-3xl">🎯</span>
+          <span class="text-base font-extrabold text-violet-950">5명 맞추기</span>
+          <span class="text-xs font-medium text-gray-500">무작위 5명 · 가볍게 한 판</span>
+        </button>
+        <button id="mode-all-btn" type="button" class="hint-btn flex flex-col items-center gap-1.5 px-4 py-6 rounded-2xl bg-white border-2 border-violet-200 cursor-pointer">
+          <span class="text-3xl">📚</span>
+          <span class="text-base font-extrabold text-violet-950">전체 사도 맞추기</span>
+          <span id="mode-all-desc" class="text-xs font-medium text-gray-500">전체 사도 · 원할 때 종료 가능</span>
+        </button>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-center gap-1.5">
+        <span class="text-[11px] font-bold text-gray-400">등급</span>
+        <span class="bg-amber-100 text-amber-800 border border-amber-300 rounded-full px-2.5 py-1 text-[11px] font-bold">👴 할배 90점 이상</span>
+        <span class="bg-violet-100 text-violet-800 border border-violet-300 rounded-full px-2.5 py-1 text-[11px] font-bold">🧑 볼청년 70점 이상</span>
+        <span class="bg-pink-100 text-pink-700 border border-pink-300 rounded-full px-2.5 py-1 text-[11px] font-bold">👶 볼응애 그 이하</span>
+      </div>
+    </section>
+
+    <!-- 게임 화면 -->
+    <div id="game-card" class="hidden card-surface rounded-2xl p-4 sm:p-6 flex flex-col gap-5">
       
       <!-- 상단 타이틀 & 라운드 진행도 -->
       <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-4">
@@ -93,14 +123,13 @@
             <circle cx="12" cy="12" r="2"></circle>
           </svg>
           <h1 class="text-lg font-extrabold text-gray-900">사도 맞히기</h1>
-          <span class="bg-emerald-100 text-emerald-800 rounded-full px-2.5 py-0.5 text-xs font-bold">기존 계산기 도감 연동</span>
         </div>
 
         <div class="flex items-center gap-3">
           <div id="round-indicators" class="flex items-center gap-1" title="문제 진행도"></div>
           <span id="round-text" class="text-xs font-bold text-gray-500">1/5</span>
           <span id="avg-badge" class="bg-violet-50 border border-violet-200 text-violet-700 rounded-full px-3 py-1 text-xs font-extrabold tabular-nums">AVG 0점</span>
-          <button id="reset-game-btn" type="button" class="text-gray-400 hover:text-red-500 text-xs font-semibold underline underline-offset-2 transition-colors cursor-pointer">처음부터</button>
+          <button id="reset-game-btn" type="button" class="text-gray-400 hover:text-red-500 text-xs font-semibold underline underline-offset-2 transition-colors cursor-pointer">모드 선택</button>
         </div>
       </div>
 
@@ -110,9 +139,8 @@
           기본 <strong class="text-violet-700">100점</strong> + 무료 코인 <strong class="text-amber-600">6점</strong>! 좌측의 <strong class="text-emerald-700">사도 기본 프로필(저비용)</strong>을 활용해 후보를 좁히세요. 스킬·실루엣·초성 힌트는 <strong class="text-red-600">점수가 대폭 차감</strong>됩니다!
         </p>
         <div class="flex flex-wrap items-center gap-1.5 mt-0.5">
-          <span class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full px-2.5 py-1 text-[11px] font-bold">기본 프로필: -2 ~ -3점</span>
-          <span class="bg-red-50 border border-red-200 text-red-700 rounded-full px-2.5 py-1 text-[11px] font-bold">스킬/어사이드: -25점</span>
-          <span class="bg-red-50 border border-red-200 text-red-700 rounded-full px-2.5 py-1 text-[11px] font-bold">실루엣: -30점 / 대사: -35점 / 초성: -50점</span>
+          <span class="bg-red-50 border border-red-200 text-red-700 rounded-full px-2.5 py-1 text-[11px] font-bold">스킬/어사이드/소개: -30점</span>
+          <span class="bg-red-50 border border-red-200 text-red-700 rounded-full px-2.5 py-1 text-[11px] font-bold">실루엣: -50점 / 칭호: -30점 / 초성: -50점</span>
           <span class="sub-surface text-gray-600 rounded-full px-2.5 py-1 text-[11px] font-semibold">오답 -5점부터 가중 감점</span>
         </div>
       </div>
@@ -140,7 +168,7 @@
                 class="hint-btn danger-hint absolute inset-0 bg-gray-900/5 backdrop-blur-[2px] flex flex-col items-center justify-center gap-1 cursor-pointer transition-all"
               >
                 <span id="silhouette-btn-label" class="text-xs font-extrabold text-gray-800 bg-white/90 px-3 py-1 rounded-full shadow-xs border border-gray-200">
-                  👤 실루엣 공개 <span class="text-red-600 font-black">-30점</span>
+                  👤 실루엣 공개 <span class="text-red-600 font-black">-50점</span>
                 </span>
                 <span id="silhouette-btn-sub" class="text-[11px] font-semibold text-gray-500">클릭 시 사도 초상화 그림자 표시</span>
               </button>
@@ -172,11 +200,6 @@
 
           <!-- 3x3 그리드 힌트 -->
           <div id="right-grid-container" class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 my-auto"></div>
-
-          <div class="border-t border-gray-200 my-1"></div>
-
-          <!-- 하단 스페셜 대사 힌트 -->
-          <div id="special-hint-container" class="w-full"></div>
         </div>
 
       </div>
@@ -218,6 +241,9 @@
           <button id="next-round-btn" type="button" class="px-5 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm cursor-pointer transition-colors">
             다음 문제로 ▶
           </button>
+          <button id="finish-btn" type="button" class="hidden px-5 py-2 rounded-lg bg-white hover:bg-gray-100 border border-gray-300 text-gray-700 font-bold text-sm cursor-pointer transition-colors">
+            여기서 끝내기
+          </button>
         </div>
       </div>
 
@@ -243,25 +269,34 @@
       { key: "role", label: "역할군", cost: 2 },
       { key: "attackType", label: "공격 타입", cost: 2 },
       { key: "grade", label: "태생 등급", cost: 3 },
-      { key: "release", label: "출시 시기", cost: 3 }
+      { key: "release", label: "출시 시기", cost: 10 }
     ];
 
     const RIGHT_GRID_HINTS = [
-      { key: "weapon", label: "사도 칭호", cost: 5, danger: false },
-      { key: "favFood", label: "최애 음식", cost: 4, danger: false },
-      { key: "hateFood", label: "극혐 음식", cost: 4, danger: false },
-      { key: "colors", label: "컬러 팔레트", cost: 6, danger: false },
-      { key: "trait", label: "사도 소개 요약", cost: 15, danger: true },
-      { key: "aside", label: "어사이드", cost: 25, danger: true },
-      { key: "lowSkill", label: "저학년 스킬", cost: 25, danger: true },
-      { key: "highSkill", label: "고학년 스킬", cost: 25, danger: true },
+      { key: "weapon", label: "사도 칭호", cost: 30, danger: true },
+      { key: "favFood", label: "최애 음식", cost: 2, danger: false },
+      { key: "hateFood", label: "극혐 음식", cost: 2, danger: false },
+      { key: "colors", label: "컬러 팔레트", cost: 2, danger: false },
+      { key: "trait", label: "사도 소개 요약", cost: 30, danger: true },
+      { key: "aside", label: "어사이드", cost: 30, danger: true },
+      { key: "lowSkill", label: "저학년 스킬", cost: 30, danger: true },
+      { key: "highSkill", label: "고학년 스킬", cost: 30, danger: true },
       { key: "initials", label: "이름 초성", cost: 50, danger: true }
     ];
 
-    const SILHOUETTE_COST = 30;
-    const SPECIAL_HINT = { key: "quote", label: "결정적 대표 대사 공개", cost: 35 };
+    const SILHOUETTE_COST = 50;
+
+    const GRADES = [
+      { min: 90, label: "할배", icon: "👴", cls: "bg-amber-100 text-amber-800 border-amber-300" },
+      { min: 70, label: "볼청년", icon: "🧑", cls: "bg-violet-100 text-violet-800 border-violet-300" },
+      { min: 0, label: "볼응애", icon: "👶", cls: "bg-pink-100 text-pink-700 border-pink-300" }
+    ];
+    function getGrade(score) {
+      return GRADES.find(g => score >= g.min) || GRADES[GRADES.length - 1];
+    }
 
     const DB = Array.isArray(window.APOSTLE_DB) ? window.APOSTLE_DB : [];
+    let gameMode = "five";
     let totalRounds = 5;
     let questionQueue = [];
     let currentRound = 0;
@@ -280,9 +315,20 @@
       return val !== undefined && val !== null && String(val).trim() !== "";
     }
 
+    function shuffle(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
     function initGame() {
       if (DB.length === 0) {
         document.getElementById("db-status-badge").textContent = "⚠️ 사도 데이터를 찾을 수 없습니다";
+        document.getElementById("mode-five-btn").disabled = true;
+        document.getElementById("mode-all-btn").disabled = true;
         return;
       }
 
@@ -292,17 +338,33 @@
         }
       });
 
-      totalRounds = Math.min(5, DB.length);
-      document.getElementById("db-status-badge").textContent = `연동 완료: 총 ${DB.length}명`;
+      document.getElementById("db-status-badge").textContent = `사도 ${DB.length}명`;
+      document.getElementById("mode-all-desc").textContent = `전체 ${DB.length}명 · 원할 때 종료 가능`;
+      document.getElementById("apostle-datalist").innerHTML = DB.map(a => `<option value="${a.name}">`).join("");
 
-      const shuffled = [...DB].sort(() => Math.random() - 0.5);
-      questionQueue = shuffled.slice(0, totalRounds);
+      document.getElementById("mode-five-btn").addEventListener("click", () => startGame("five"));
+      document.getElementById("mode-all-btn").addEventListener("click", () => startGame("all"));
+      showMenu();
+    }
+
+    function showMenu() {
+      isRoundOver = true;
+      document.getElementById("game-card").classList.add("hidden");
+      document.getElementById("mode-select").classList.remove("hidden");
+      window.scrollTo({ top: 0 });
+    }
+
+    function startGame(mode) {
+      if (DB.length === 0) return;
+      gameMode = mode;
+      totalRounds = mode === "all" ? DB.length : Math.min(5, DB.length);
+      questionQueue = shuffle(DB).slice(0, totalRounds);
       currentRound = 0;
       roundScores = [];
-      
-      const datalist = document.getElementById("apostle-datalist");
-      datalist.innerHTML = DB.map(a => `<option value="${a.name}">`).join("");
 
+      document.getElementById("mode-select").classList.add("hidden");
+      document.getElementById("game-card").classList.remove("hidden");
+      window.scrollTo({ top: 0 });
       startRound();
     }
 
@@ -322,13 +384,13 @@
       document.getElementById("wrong-guesses-log").innerHTML = "";
       document.getElementById("round-result-box").classList.add("hidden");
       document.getElementById("round-result-box").classList.remove("flex");
+      document.getElementById("finish-btn").classList.add("hidden");
 
       updateHeaderIndicators();
       updateScoreDisplay();
       renderSilhouetteBox();
       renderLeftHints();
       renderRightGridHints();
-      renderSpecialHint();
     }
 
     function spendCost(cost) {
@@ -399,12 +461,17 @@
     function updateHeaderIndicators() {
       const container = document.getElementById("round-indicators");
       container.innerHTML = "";
-      for (let i = 0; i < totalRounds; i++) {
-        const bar = document.createElement("span");
-        bar.className = `h-1.5 w-4 rounded-full transition-colors ${
-          i < currentRound ? "bg-violet-400" : i === currentRound ? "bg-violet-600" : "bg-gray-200"
-        }`;
-        container.appendChild(bar);
+      if (totalRounds > 12) {
+        const pct = Math.round((currentRound / totalRounds) * 100);
+        container.innerHTML = `<div class="h-1.5 w-24 rounded-full bg-gray-200 overflow-hidden"><div class="h-full bg-violet-600 transition-all" style="width:${pct}%"></div></div>`;
+      } else {
+        for (let i = 0; i < totalRounds; i++) {
+          const bar = document.createElement("span");
+          bar.className = `h-1.5 w-4 rounded-full transition-colors ${
+            i < currentRound ? "bg-violet-400" : i === currentRound ? "bg-violet-600" : "bg-gray-200"
+          }`;
+          container.appendChild(bar);
+        }
       }
       document.getElementById("round-text").textContent = `${currentRound + 1}/${totalRounds}`;
 
@@ -496,34 +563,6 @@
       });
     }
 
-    function renderSpecialHint() {
-      const container = document.getElementById("special-hint-container");
-      const isOpened = openedHints.has(SPECIAL_HINT.key);
-      const valid = hasValidData(currentApostle, SPECIAL_HINT.key);
-
-      container.innerHTML = "";
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.disabled = isOpened || isRoundOver || !valid;
-      btn.className = `hint-btn danger-hint w-full min-h-[64px] px-4 py-3 rounded-xl bg-white border flex flex-col items-center justify-center gap-1 cursor-pointer disabled:cursor-default ${!valid ? "border-gray-200 bg-gray-50 opacity-60" : isOpened ? "border-amber-300 bg-amber-50/40" : "border-red-200"}`;
-
-      if (!valid) {
-        btn.innerHTML = `<span class="text-xs font-bold text-gray-400">${SPECIAL_HINT.label}</span><span class="text-[11px] text-gray-400">(대사 미입력)</span>`;
-      } else if (isOpened) {
-        btn.innerHTML = `<span class="text-[11px] font-bold text-amber-700">💬 사도 대표 대사</span><span class="text-sm font-extrabold text-gray-900 animate-pop">"${currentApostle.quote}"</span>`;
-      } else {
-        btn.innerHTML = `<span class="text-xs font-extrabold text-gray-800">🔒 ${SPECIAL_HINT.label} <span class="text-red-600">(-${SPECIAL_HINT.cost}점)</span></span><span class="text-[11px] text-gray-400">클릭 시 대사 확인 (대량 감점 주의)</span>`;
-      }
-
-      btn.addEventListener("click", () => {
-        if (isOpened || isRoundOver || !valid) return;
-        openedHints.add(SPECIAL_HINT.key);
-        spendCost(SPECIAL_HINT.cost);
-        renderSpecialHint();
-      });
-      container.appendChild(btn);
-    }
-
     document.getElementById("guess-form").addEventListener("submit", (e) => {
       e.preventDefault();
       if (isRoundOver) return;
@@ -579,13 +618,11 @@
 
       LEFT_HINTS.forEach(h => { if (hasValidData(currentApostle, h.key)) openedHints.add(h.key); });
       RIGHT_GRID_HINTS.forEach(h => { if (hasValidData(currentApostle, h.key)) openedHints.add(h.key); });
-      if (hasValidData(currentApostle, SPECIAL_HINT.key)) openedHints.add(SPECIAL_HINT.key);
       if (hasValidData(currentApostle, "imageUrl")) openedHints.add("silhouette");
 
       renderSilhouetteBox();
       renderLeftHints();
       renderRightGridHints();
-      renderSpecialHint();
 
       document.getElementById("guess-input").disabled = true;
       document.getElementById("submit-btn").disabled = true;
@@ -596,35 +633,67 @@
       const titleEl = document.getElementById("result-title");
       const descEl = document.getElementById("result-desc");
       const nextBtn = document.getElementById("next-round-btn");
+      const finishBtn = document.getElementById("finish-btn");
 
       resultBox.classList.remove("hidden");
       resultBox.classList.add("flex");
 
       if (currentRound + 1 < totalRounds) {
-        titleEl.textContent = isWin ? `🎉 정답! (${finalScore}점 획득)` : `💦 아쉽네요! (0점)`;
+        const g = getGrade(finalScore);
+        titleEl.textContent = isWin
+          ? `🎉 정답! (${finalScore}점 획득 · ${g.icon} ${g.label})`
+          : `💦 아쉽네요! (0점 · ${g.icon} ${g.label})`;
         descEl.textContent = message;
         nextBtn.textContent = `다음 문제로 (${currentRound + 2}/${totalRounds}) ▶`;
         nextBtn.onclick = () => {
           currentRound++;
           startRound();
         };
+        if (gameMode === "all") {
+          finishBtn.classList.remove("hidden");
+          finishBtn.onclick = () => showFinalSummary("여기까지 플레이한 결과예요!");
+        } else {
+          finishBtn.classList.add("hidden");
+        }
       } else {
-        const totalAvg = Math.round(roundScores.reduce((a, b) => a + b, 0) / totalRounds);
-        titleEl.textContent = `🏆 ${totalRounds}라운드 종료! 최종 평균: ${totalAvg}점`;
-        descEl.innerHTML = `${message}<br><span class="text-xs text-violet-700 font-bold mt-1 inline-block">라운드별 점수: ${roundScores.join("점 / ")}점</span>`;
-        nextBtn.textContent = "📋 결과 복사 & 다시 시작하기";
-        nextBtn.onclick = () => {
-          const shareText = `[트릭컬 사도 스무고개]\n최종 평균: ${totalAvg}점\n기록: ${roundScores.join(" / ")}점`;
-          navigator.clipboard?.writeText(shareText);
-          alert("결과가 클립보드에 복사되었습니다!");
-          initGame();
-        };
+        finishBtn.classList.add("hidden");
+        showFinalSummary(message);
       }
     }
 
+    function showFinalSummary(message) {
+      const played = roundScores.length;
+      const totalAvg = Math.round(roundScores.reduce((a, b) => a + b, 0) / played);
+      const wins = roundScores.filter(sc => sc > 0).length;
+      const g = getGrade(totalAvg);
+
+      const titleEl = document.getElementById("result-title");
+      const descEl = document.getElementById("result-desc");
+      const nextBtn = document.getElementById("next-round-btn");
+      document.getElementById("finish-btn").classList.add("hidden");
+
+      const detail = gameMode === "all"
+        ? `정답 ${wins} / ${played}`
+        : `라운드별 점수: ${roundScores.join("점 / ")}점`;
+
+      titleEl.textContent = `🏆 ${played}라운드 종료! 최종 평균: ${totalAvg}점`;
+      descEl.innerHTML = `${message}<br>
+        <span class="inline-block mt-2 px-4 py-1.5 rounded-full border text-base font-black ${g.cls}">${g.icon} ${g.label}</span><br>
+        <span class="text-xs text-violet-700 font-bold mt-2 inline-block">${detail}</span>`;
+
+      nextBtn.textContent = "📋 결과 복사 & 모드 선택으로";
+      nextBtn.onclick = () => {
+        const modeName = gameMode === "all" ? "전체 사도" : "5명";
+        const shareText = `[트릭컬 사도 스무고개 · ${modeName}]\n최종 평균: ${totalAvg}점 (${g.label})\n${gameMode === "all" ? detail : "기록: " + roundScores.join(" / ") + "점"}`;
+        navigator.clipboard?.writeText(shareText);
+        alert("결과가 클립보드에 복사되었습니다!");
+        showMenu();
+      };
+    }
+
     document.getElementById("reset-game-btn").addEventListener("click", () => {
-      if (confirm("처음부터 다시 시작할까요?")) {
-        initGame();
+      if (confirm("진행 중인 게임을 종료하고 모드 선택으로 돌아갈까요?")) {
+        showMenu();
       }
     });
 
