@@ -10,6 +10,7 @@
   <!-- 데이터 파일 → 변환 파일 순서대로 로드 -->
   <script src="./data.js"></script>
   <script src="./apostles.js"></script>
+  <script src="./aliases.js"></script>
 
   <style>
     body {
@@ -213,7 +214,7 @@
               list="apostle-datalist" 
               type="text" 
               autocomplete="off"
-              placeholder="사도 이름 입력" 
+              placeholder="사도 이름 또는 별명 입력" 
               class="w-full h-10 px-3.5 rounded-lg bg-white border border-gray-300 text-sm font-bold text-center focus:outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-200"
             >
             <datalist id="apostle-datalist"></datalist>
@@ -315,6 +316,46 @@
     }
 
     const DB = Array.isArray(window.APOSTLE_DB) ? window.APOSTLE_DB : [];
+
+    // 별명은 정답 판정에만 사용하며, 자동완성에는 표시하지 않습니다.
+    let aliasToName = new Map();
+
+    function normalizeGuessName(value) {
+      return String(value ?? "").trim().replace(/\s+/g, " ");
+    }
+
+    function loadAliasData() {
+      const aliasData = window.APOSTLE_ALIASES;
+      const canonicalNames = new Set(DB.map(a => normalizeGuessName(a.name)));
+      const candidates = new Map();
+
+      if (!aliasData || typeof aliasData !== "object" || Array.isArray(aliasData)) {
+        aliasToName = new Map();
+        return;
+      }
+
+      Object.entries(aliasData).forEach(([aliasText, nameText]) => {
+        const alias = normalizeGuessName(aliasText);
+        const canonicalName = normalizeGuessName(nameText);
+        if (!alias || canonicalNames.has(alias) || !canonicalNames.has(canonicalName)) return;
+        if (!candidates.has(alias)) candidates.set(alias, new Set());
+        candidates.get(alias).add(canonicalName);
+      });
+
+      // 서로 다른 사도에게 중복 등록된 별명은 오판을 막기 위해 제외합니다.
+      aliasToName = new Map(
+        [...candidates.entries()]
+          .filter(([, owners]) => owners.size === 1)
+          .map(([alias, owners]) => [alias, owners.values().next().value])
+      );
+    }
+
+    function resolveGuessName(value) {
+      const normalized = normalizeGuessName(value);
+      const exactMatch = DB.find(a => normalizeGuessName(a.name) === normalized);
+      return exactMatch ? exactMatch.name : (aliasToName.get(normalized) || null);
+    }
+
     let gameMode = "five";
     let totalRounds = 5;
     let questionQueue = [];
@@ -535,7 +576,7 @@
       return hint.allowEmpty || hasValidData(apostle, hint.key);
     }
 
-    function initGame() {
+    async function initGame() {
       if (DB.length === 0) {
         document.getElementById("db-status-badge").textContent = "⚠️ 사도 데이터를 찾을 수 없습니다";
         document.getElementById("mode-five-btn").disabled = true;
@@ -549,9 +590,19 @@
         }
       });
 
-      document.getElementById("db-status-badge").textContent = `사도 ${DB.length}명`;
+      loadAliasData();
+
+      document.getElementById("db-status-badge").textContent = `사도 ${DB.length}명 · 별명 ${aliasToName.size}개 인식`;
       document.getElementById("mode-all-desc").textContent = `전체 ${DB.length}명 · 원할 때 종료 가능`;
-      document.getElementById("apostle-datalist").innerHTML = DB.map(a => `<option value="${a.name}">`).join("");
+
+      // 자동완성에는 data.js의 사도 본명만 넣습니다. 별명은 직접 입력하면 정답 판정에서 확인합니다.
+      const datalist = document.getElementById("apostle-datalist");
+      datalist.replaceChildren();
+      DB.forEach(a => {
+        const option = document.createElement("option");
+        option.value = a.name;
+        datalist.appendChild(option);
+      });
 
       document.getElementById("mode-five-btn").addEventListener("click", () => startGame("five"));
       document.getElementById("mode-all-btn").addEventListener("click", () => startGame("all"));
@@ -792,7 +843,8 @@
       if (!guessName) return;
       inputEl.value = "";
 
-      if (guessName === currentApostle.name) {
+      const resolvedGuessName = resolveGuessName(guessName);
+      if (resolvedGuessName === currentApostle.name) {
         endRound(true, `정답입니다! 숨겨진 사도는 [${currentApostle.name}]였습니다!`);
         return;
       }
@@ -803,7 +855,7 @@
       feedbackEl.className = "text-xs font-bold text-red-600 animate-pop";
       feedbackEl.textContent = `❌ [${guessName}] 오답입니다! (-${penalty}점 차감)`;
 
-      const guessedApostle = DB.find(a => a.name === guessName);
+      const guessedApostle = DB.find(a => a.name === resolvedGuessName);
       const logContainer = document.getElementById("wrong-guesses-log");
       const logItem = document.createElement("div");
       logItem.className = "flex flex-wrap items-center justify-between gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 text-xs animate-pop";
