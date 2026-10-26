@@ -91,7 +91,7 @@
         <p class="text-sm text-gray-500 font-medium">힌트를 적게 열수록 높은 점수! 모드를 선택하세요.</p>
       </div>
 
-      <div class="grid sm:grid-cols-2 gap-3 w-full max-w-xl">
+      <div class="grid sm:grid-cols-3 gap-3 w-full max-w-4xl">
         <button id="mode-five-btn" type="button" class="hint-btn flex flex-col items-center gap-1.5 px-4 py-6 rounded-2xl bg-white border-2 border-violet-200 cursor-pointer">
           <span class="text-3xl">🎯</span>
           <span class="text-base font-extrabold text-violet-950">5명 맞추기</span>
@@ -101,6 +101,11 @@
           <span class="text-3xl">📚</span>
           <span class="text-base font-extrabold text-violet-950">전체 사도 맞추기</span>
           <span id="mode-all-desc" class="text-xs font-medium text-gray-500">전체 사도 · 원할 때 종료 가능</span>
+        </button>
+        <button id="mode-hard-btn" type="button" class="hint-btn flex flex-col items-center gap-1.5 px-4 py-6 rounded-2xl bg-white border-2 border-red-200 cursor-pointer">
+          <span class="text-3xl">🔥</span>
+          <span class="text-base font-extrabold text-red-900">하드모드</span>
+          <span class="text-xs font-medium text-gray-500">무작위 5명 · 오답 비교 정보 없음</span>
         </button>
       </div>
 
@@ -361,6 +366,7 @@
     let questionQueue = [];
     let currentRound = 0;
     let currentApostle = null;
+    let roundWon = false;
     const FREE_COINS = 10;
     let freeCoins = FREE_COINS;
     let currentScore = 100;
@@ -581,6 +587,7 @@
         document.getElementById("db-status-badge").textContent = "⚠️ 사도 데이터를 찾을 수 없습니다";
         document.getElementById("mode-five-btn").disabled = true;
         document.getElementById("mode-all-btn").disabled = true;
+        document.getElementById("mode-hard-btn").disabled = true;
         return;
       }
 
@@ -606,6 +613,7 @@
 
       document.getElementById("mode-five-btn").addEventListener("click", () => startGame("five"));
       document.getElementById("mode-all-btn").addEventListener("click", () => startGame("all"));
+      document.getElementById("mode-hard-btn").addEventListener("click", () => startGame("hard"));
       showMenu();
     }
 
@@ -636,6 +644,7 @@
       freeCoins = FREE_COINS;
       currentScore = 100;
       wrongCount = 0;
+      roundWon = false;
       openedHints.clear();
       isRoundOver = false;
 
@@ -700,7 +709,16 @@
       btnLabel.innerHTML = `👤 실루엣 공개 <span class="text-red-600 font-black">-${SILHOUETTE_COST}점</span>`;
       btnSub.textContent = `클릭 시 사도 초상화 그림자 표시`;
 
-      if (isRoundOver) {
+      if (isRoundOver && gameMode === "hard" && !roundWon) {
+        // 하드모드에서 실패하면 정답 초상화/이름을 공개하지 않습니다.
+        if (isSilhouetteOpened && hasImg) {
+          canvas.innerHTML = `<img src="${currentApostle.imageUrl}" alt="실루엣" class="h-28 w-28 object-contain silhouette-mode">`;
+        } else {
+          canvas.innerHTML = `<div class="text-gray-300 select-none text-5xl font-black">?</div>`;
+        }
+        btn.classList.add("hidden");
+        btn.disabled = true;
+      } else if (isRoundOver) {
         canvas.innerHTML = hasImg
           ? `<div class="reveal-mode flex flex-col items-center"><img src="${currentApostle.imageUrl}" alt="${currentApostle.name}" class="h-24 w-24 object-contain" onerror="this.style.display='none'"><span class="text-xs font-black text-violet-900 mt-1">${currentApostle.name}</span></div>`
           : `<div class="flex flex-col items-center"><span class="text-lg font-black text-violet-900">${currentApostle.name}</span></div>`;
@@ -810,7 +828,8 @@
             valHtml = `<div class="flex items-center gap-1.5 mt-0.5 animate-pop">${swatches}</div>`;
           } else {
             const rawText = currentApostle[hint.key];
-            const displayText = (isRoundOver || hint.key === "initials" || hint.key === "favFood" || hint.key === "hateFood")
+            const revealText = isRoundOver && (gameMode !== "hard" || roundWon);
+            const displayText = (revealText || hint.key === "initials" || hint.key === "favFood" || hint.key === "hateFood")
               ? rawText
               : maskApostleName(rawText, currentApostle.name);
 
@@ -850,26 +869,33 @@
       }
 
       const penalty = applyWrongPenalty();
-      const feedbackEl = document.getElementById("feedback-msg");
-      feedbackEl.classList.remove("hidden");
-      feedbackEl.className = "text-xs font-bold text-red-600 animate-pop";
-      feedbackEl.textContent = `❌ [${guessName}] 오답입니다! (-${penalty}점 차감)`;
 
-      const guessedApostle = DB.find(a => a.name === resolvedGuessName);
-      const logContainer = document.getElementById("wrong-guesses-log");
-      const logItem = document.createElement("div");
-      logItem.className = "flex flex-wrap items-center justify-between gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 text-xs animate-pop";
+      if (gameMode !== "hard") {
+        const feedbackEl = document.getElementById("feedback-msg");
+        feedbackEl.classList.remove("hidden");
+        feedbackEl.className = "text-xs font-bold text-red-600 animate-pop";
+        feedbackEl.textContent = `❌ [${guessName}] 오답입니다! (-${penalty}점 차감)`;
 
-      if (guessedApostle) {
-        const checkMatch = (key, label) => {
-          const isMatch = guessedApostle[key] === currentApostle[key];
-          return `<span class="px-2 py-0.5 rounded font-bold ${isMatch ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-gray-100 text-gray-400"}">${label}: ${guessedApostle[key]} ${isMatch ? "⭕" : "❌"}</span>`;
-        };
-        logItem.innerHTML = `<span class="font-extrabold text-gray-800">${guessName}</span><div class="flex flex-wrap gap-1">${checkMatch("personality", "성격")}${checkMatch("race", "종족")}${checkMatch("row", "열")}${checkMatch("role", "역할")}${checkMatch("attackType", "공격")}</div>`;
+        const guessedApostle = DB.find(a => a.name === resolvedGuessName);
+        const logContainer = document.getElementById("wrong-guesses-log");
+        const logItem = document.createElement("div");
+        logItem.className = "flex flex-wrap items-center justify-between gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 text-xs animate-pop";
+
+        if (guessedApostle) {
+          const checkMatch = (key, label) => {
+            const isMatch = guessedApostle[key] === currentApostle[key];
+            return `<span class="px-2 py-0.5 rounded font-bold ${isMatch ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-gray-100 text-gray-400"}">${label}: ${guessedApostle[key]} ${isMatch ? "⭕" : "❌"}</span>`;
+          };
+          logItem.innerHTML = `<span class="font-extrabold text-gray-800">${guessName}</span><div class="flex flex-wrap gap-1">${checkMatch("personality", "성격")}${checkMatch("race", "종족")}${checkMatch("row", "열")}${checkMatch("role", "역할")}${checkMatch("attackType", "공격")}</div>`;
+        } else {
+          logItem.innerHTML = `<span class="font-bold text-gray-600">${guessName}</span><span class="text-gray-400 text-[11px]">DB에 없는 이름입니다</span>`;
+        }
+        logContainer.prepend(logItem);
       } else {
-        logItem.innerHTML = `<span class="font-bold text-gray-600">${guessName}</span><span class="text-gray-400 text-[11px]">DB에 없는 이름입니다</span>`;
+        // 하드모드에서는 오답 문구, 비교 결과, DB 등록 여부를 일절 표시하지 않습니다.
+        document.getElementById("feedback-msg").classList.add("hidden");
+        document.getElementById("wrong-guesses-log").innerHTML = "";
       }
-      logContainer.prepend(logItem);
 
       if (currentScore <= 0) {
         endRound(false, "점수가 모두 소진되어 게임 오버되었습니다!");
@@ -885,12 +911,19 @@
 
     function endRound(isWin, message) {
       isRoundOver = true;
+      roundWon = isWin;
       const finalScore = isWin ? currentScore : 0;
       roundScores.push(finalScore);
+      const revealSolution = gameMode !== "hard" || isWin;
+      const resultMessage = revealSolution
+        ? message
+        : "하드모드에서 실패했습니다. 정답과 추가 정보는 공개되지 않습니다.";
 
-      LEFT_HINTS.forEach(h => { if (hasValidData(currentApostle, h.key)) openedHints.add(h.key); });
-      RIGHT_GRID_HINTS.forEach(h => { if (isHintAvailable(currentApostle, h)) openedHints.add(h.key); });
-      if (hasValidData(currentApostle, "imageUrl")) openedHints.add("silhouette");
+      if (revealSolution) {
+        LEFT_HINTS.forEach(h => { if (hasValidData(currentApostle, h.key)) openedHints.add(h.key); });
+        RIGHT_GRID_HINTS.forEach(h => { if (isHintAvailable(currentApostle, h)) openedHints.add(h.key); });
+        if (hasValidData(currentApostle, "imageUrl")) openedHints.add("silhouette");
+      }
 
       renderSilhouetteBox();
       renderLeftHints();
@@ -915,7 +948,7 @@
         titleEl.textContent = isWin
           ? `🎉 정답! (${finalScore}점 획득 · ${g.icon} ${g.label})`
           : `💦 아쉽네요! (0점 · ${g.icon} ${g.label})`;
-        descEl.textContent = message;
+        descEl.textContent = resultMessage;
         nextBtn.textContent = `다음 문제로 (${currentRound + 2}/${totalRounds}) ▶`;
         nextBtn.onclick = () => {
           currentRound++;
@@ -929,7 +962,7 @@
         }
       } else {
         finishBtn.classList.add("hidden");
-        showFinalSummary(message);
+        showFinalSummary(resultMessage);
       }
     }
 
@@ -955,7 +988,7 @@
 
       nextBtn.textContent = "📋 결과 복사 & 모드 선택으로";
       nextBtn.onclick = () => {
-        const modeName = gameMode === "all" ? "전체 사도" : "5명";
+        const modeName = gameMode === "all" ? "전체 사도" : gameMode === "hard" ? "하드모드(5명)" : "5명";
         const shareText = `[트릭컬 사도 스무고개 · ${modeName}]\n최종 평균: ${totalAvg}점 (${g.label})\n${gameMode === "all" ? detail : "기록: " + roundScores.join(" / ") + "점"}`;
         navigator.clipboard?.writeText(shareText);
         alert("결과가 클립보드에 복사되었습니다!");
