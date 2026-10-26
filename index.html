@@ -2,204 +2,631 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>Trickcal Precision PNGTuber Studio V2</title>
-  <link rel="stylesheet" href="styles.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>사도 맞히기 - 트릭컬 스무고개</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
+  
+  <!-- 기존 계산기 데이터 및 브릿지 파일 순서대로 로드 -->
+  <script src="./data.js"></script>
+  <script src="./apostles.js"></script>
+
+  <style>
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background-color: #f8f7fc;
+      color: #2c2738;
+    }
+    .card-surface {
+      background-color: #ffffff;
+      border: 1px solid #e6e3f0;
+      box-shadow: 0 4px 16px rgba(100, 85, 140, 0.05);
+    }
+    .sub-surface {
+      background-color: #f3f1f9;
+      border: 1px solid #e2ddf0;
+    }
+    .hint-btn {
+      transition: all 0.15s ease-in-out;
+    }
+    .hint-btn:hover:not(:disabled) {
+      border-color: #8b5cf6;
+      background-color: #f5f3ff;
+      transform: translateY(-1px);
+    }
+    .hint-btn.danger-hint:hover:not(:disabled) {
+      border-color: #ef4444;
+      background-color: #fef2f2;
+    }
+    /* 성격별 테마 뱃지 컬러 */
+    .badge-광기 { background-color: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
+    .badge-순수 { background-color: #dcfce7; color: #16a34a; border: 1px solid #86efac; }
+    .badge-냉정 { background-color: #dbeafe; color: #2563eb; border: 1px solid #93c5fd; }
+    .badge-우울 { background-color: #f3e8ff; color: #9333ea; border: 1px solid #d8b4fe; }
+    .badge-활발 { background-color: #fef9c3; color: #ca8a04; border: 1px solid #fde047; }
+
+    /* 실루엣 필터 효과 */
+    .silhouette-mode {
+      filter: brightness(0) drop-shadow(0 4px 8px rgba(0,0,0,0.25));
+      transition: filter 0.4s ease;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+    .reveal-mode {
+      filter: brightness(1) drop-shadow(0 4px 10px rgba(139, 92, 246, 0.3));
+      transition: filter 0.4s ease;
+    }
+
+    @keyframes popIn {
+      0% { transform: scale(0.95); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-pop {
+      animation: popIn 0.2s ease-out forwards;
+    }
+  </style>
 </head>
-<body class="bg-transparent">
+<body class="min-h-screen flex flex-col">
 
-  <div id="toast">방송 모드 켜짐 (복귀: H 키 또는 아바타 더블클릭)</div>
-
-  <div class="workspace">
-    <!-- 좌측: 아바타 라이브 스테이지 -->
-    <div class="stage-card">
-      <div class="avatar-container" id="avatar-box" title="더블클릭하면 방송 모드로 전환됩니다">
-        <div class="avatar-breathe" id="avatar">
-          <img id="part-base"  class="layer layer-base"  alt="base">
-          <img id="part-eyes"  class="layer layer-eyes"  alt="eyes">
-          <img id="part-mouth" class="layer layer-mouth" alt="mouth">
-          <img id="part-fx"    class="layer layer-fx"    alt="fx">
-        </div>
+  <!-- 상단 헤더 -->
+  <header class="bg-white border-b border-[#e6e3f0] sticky top-0 z-30">
+    <div class="max-w-[1000px] mx-auto px-4 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center text-white font-black text-base shadow-sm">T</div>
+        <span class="text-lg font-extrabold tracking-tight text-violet-950">트릭컬<span class="font-medium text-violet-600">스무고개</span></span>
       </div>
-
-      <div class="studio-ui" style="display:flex; flex-direction:column; align-items:center;">
-        <div class="expression-bar">
-          <button class="exp-btn active" data-exp="normal" onclick="setExpression('normal')">
-            <span>🙂 기본</span><span class="key-hint">Key 1</span>
-          </button>
-          <button class="exp-btn" data-exp="happy" onclick="setExpression('happy')">
-            <span>😆 해피</span><span class="key-hint">Key 2</span>
-          </button>
-          <button class="exp-btn" data-exp="shock" onclick="setExpression('shock')">
-            <span>😰 당황</span><span class="key-hint">Key 3</span>
-          </button>
-          <button class="exp-btn" data-exp="angry" onclick="setExpression('angry')">
-            <span>💢 버럭</span><span class="key-hint">Key 4</span>
-          </button>
-        </div>
-
-        <!-- 클릭해서 입 모양을 미리 테스트해볼 수 있는 배지 -->
-        <div class="state-badge" title="클릭하면 해당 입 모양을 미리 볼 수 있습니다">
-          <div class="step-dot active" id="dot-0" onclick="previewMouthStep(0)">0. 닫힘</div>
-          <div class="step-dot" id="dot-1" onclick="previewMouthStep(1)">1. 작게</div>
-          <div class="step-dot" id="dot-2" onclick="previewMouthStep(2)">2. 보통</div>
-          <div class="step-dot" id="dot-3" onclick="previewMouthStep(3)">3. 크게</div>
-        </div>
-      </div>
+      <div id="db-status-badge" class="text-xs text-gray-500 font-semibold">데이터 연동 중...</div>
     </div>
+  </header>
 
-    <!-- 우측: 정밀 파츠 분할기 & 마이크 설정 -->
-    <div class="studio-panel studio-ui">
-      <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('rig')">🎯 1. 정밀 파츠 에디터</button>
-        <button class="tab-btn" onclick="switchTab('mic')">🎙️ 2. 마이크 & 방송 설정</button>
+  <!-- 메인 컨텐츠 -->
+  <main class="flex-1 max-w-[1000px] w-full mx-auto px-4 py-6">
+    <div class="card-surface rounded-2xl p-4 sm:p-6 flex flex-col gap-5">
+      
+      <!-- 상단 타이틀 & 라운드 진행도 -->
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-4">
+        <div class="flex items-center gap-2">
+          <svg class="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"></circle>
+            <circle cx="12" cy="12" r="6"></circle>
+            <circle cx="12" cy="12" r="2"></circle>
+          </svg>
+          <h1 class="text-lg font-extrabold text-gray-900">사도 맞히기</h1>
+          <span class="bg-emerald-100 text-emerald-800 rounded-full px-2.5 py-0.5 text-xs font-bold">기존 계산기 도감 연동</span>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div id="round-indicators" class="flex items-center gap-1" title="문제 진행도"></div>
+          <span id="round-text" class="text-xs font-bold text-gray-500">1/5</span>
+          <span id="avg-badge" class="bg-violet-50 border border-violet-200 text-violet-700 rounded-full px-3 py-1 text-xs font-extrabold tabular-nums">AVG 0점</span>
+          <button id="reset-game-btn" type="button" class="text-gray-400 hover:text-red-500 text-xs font-semibold underline underline-offset-2 transition-colors cursor-pointer">처음부터</button>
+        </div>
       </div>
 
-      <!-- [탭 1] 마우스 드래그 & 무제한 미세조정 에디터 -->
-      <div id="tab-rig" class="tab-content active">
-        <label class="drop-zone" id="drop-zone">
-          <input type="file" id="file-input" accept="image/png,image/webp,image/jpeg">
-          <div style="font-weight:bold; font-size:12px; color:#a29bfe;">📂 트릭컬 캐릭터 이미지 업로드 (클릭 또는 드래그)</div>
-        </label>
-
-        <!-- 눈/입 위치 자동 감지 -->
-        <div class="detect-row">
-          <button id="auto-detect-btn" class="mini-btn" title="피부 영역을 찾고 그 안의 눈 2개·입 1개 위치를 자동으로 맞춥니다">🎯 눈·입 자동 감지</button>
-          <button id="undo-detect-btn" class="mini-btn" style="display:none;">↶ 감지 전으로</button>
+      <!-- 룰 안내 영역 -->
+      <div class="flex flex-col gap-1.5">
+        <p class="text-gray-600 text-[13px] font-medium">
+          기본 <strong class="text-violet-700">100점</strong> + 무료 코인 <strong class="text-amber-600">6점</strong>! 좌측의 <strong class="text-emerald-700">사도 기본 프로필(저비용)</strong>을 활용해 후보를 좁히세요. 스킬·실루엣·초성 힌트는 <strong class="text-red-600">점수가 대폭 차감</strong>됩니다!
+        </p>
+        <div class="flex flex-wrap items-center gap-1.5 mt-0.5">
+          <span class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full px-2.5 py-1 text-[11px] font-bold">기본 프로필: -2 ~ -3점</span>
+          <span class="bg-red-50 border border-red-200 text-red-700 rounded-full px-2.5 py-1 text-[11px] font-bold">스킬/어사이드: -25점</span>
+          <span class="bg-red-50 border border-red-200 text-red-700 rounded-full px-2.5 py-1 text-[11px] font-bold">실루엣: -30점 / 대사: -35점 / 초성: -50점</span>
+          <span class="sub-surface text-gray-600 rounded-full px-2.5 py-1 text-[11px] font-semibold">오답 -5점부터 가중 감점</span>
         </div>
-        <div id="detect-hint" class="tool-hint"></div>
+      </div>
 
-        <div class="canvas-legend">
-          <span><i class="legend-dot" style="background:#0984e3;"></i>왼눈(L)</span>
-          <span><i class="legend-dot" style="background:#00b894;"></i>오른눈(R)</span>
-          <span><i class="legend-dot" style="background:#ff7675;"></i>입(M)</span>
-          <span style="color:#888;">※ 박스 드래그 이동 / 우측하단 점 크기조절</span>
-        </div>
-
-        <!-- 마우스로 직접 박스를 옮기고 크기를 조절하는 캔버스 -->
-        <div class="rig-editor-container">
-          <canvas id="rig-canvas" width="400" height="400"></canvas>
-        </div>
-
-        <!-- 파츠 선택 탭 (각 파츠의 X, Y, W, H 완전 독립) -->
-        <div class="part-selector">
-          <button class="part-sel-btn active" data-part="eyeL" onclick="selectPart('eyeL')">🔵 왼쪽 눈 (L)</button>
-          <button class="part-sel-btn" data-part="eyeR" onclick="selectPart('eyeR')">🟢 오른쪽 눈 (R)</button>
-          <button class="part-sel-btn" data-part="mouth" onclick="selectPart('mouth')">🔴 입 (Mouth)</button>
-        </div>
-
-        <!-- 선택된 파츠의 무제한 미세 조정 (최소 크기 0.5%까지 허용) -->
-        <div class="fine-tune-box">
-          <div class="tune-grid">
-            <div class="tune-row">
-              <div class="tune-header"><span>가로 위치 (X %)</span><input type="number" id="num-x" class="num-input" step="0.2" min="0" max="100"></div>
-              <input type="range" id="sl-x" min="0" max="100" step="0.2">
+      <!-- 핵심 게임 보드 -->
+      <div class="flex flex-col md:flex-row gap-4 items-stretch">
+        
+        <!-- 좌측: 사도 실루엣 뷰어 + 기본 프로필 -->
+        <div class="sub-surface rounded-xl p-4 md:w-72 flex flex-col justify-between gap-3.5 shrink-0">
+          <div class="flex flex-col gap-3">
+            <div class="flex items-center justify-between border-b border-gray-200 pb-2">
+              <div class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span class="text-[13px] font-extrabold text-gray-800">사도 기본 프로필</span>
+              </div>
+              <span class="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">추천 오픈</span>
             </div>
-            <div class="tune-row">
-              <div class="tune-header"><span>세로 위치 (Y %)</span><input type="number" id="num-y" class="num-input" step="0.2" min="0" max="100"></div>
-              <input type="range" id="sl-y" min="0" max="100" step="0.2">
+
+            <!-- 실루엣 / 캐릭터 초상화 프리뷰 박스 -->
+            <div class="relative w-full h-36 rounded-xl bg-white border border-gray-200 flex flex-col items-center justify-center overflow-hidden p-2">
+              <div id="silhouette-canvas" class="w-full h-full flex items-center justify-center"></div>
+              <button 
+                id="silhouette-btn" 
+                type="button" 
+                class="hint-btn danger-hint absolute inset-0 bg-gray-900/5 backdrop-blur-[2px] flex flex-col items-center justify-center gap-1 cursor-pointer transition-all"
+              >
+                <span id="silhouette-btn-label" class="text-xs font-extrabold text-gray-800 bg-white/90 px-3 py-1 rounded-full shadow-xs border border-gray-200">
+                  👤 실루엣 공개 <span class="text-red-600 font-black">-30점</span>
+                </span>
+                <span id="silhouette-btn-sub" class="text-[11px] font-semibold text-gray-500">클릭 시 사도 초상화 그림자 표시</span>
+              </button>
             </div>
-            <div class="tune-row">
-              <div class="tune-header"><span>가로 폭 (W %)</span><input type="number" id="num-w" class="num-input" step="0.2" min="0.5" max="60"></div>
-              <input type="range" id="sl-w" min="0.5" max="45" step="0.2">
+
+            <!-- 좌측 기본 프로필 힌트 리스트 -->
+            <div id="left-hints-container" class="flex flex-col gap-1.5"></div>
+          </div>
+
+          <!-- 코인 및 남은 점수 상태창 -->
+          <div class="border-t border-gray-200 pt-3 flex flex-col gap-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-gray-600">무료 오픈 코인</span>
+              <span id="free-coin-display" class="rounded-full px-2.5 py-0.5 text-xs font-extrabold tabular-nums bg-amber-100 text-amber-800">6 / 6</span>
             </div>
-            <div class="tune-row">
-              <div class="tune-header"><span>세로 높이 (H %)</span><input type="number" id="num-h" class="num-input" step="0.2" min="0.5" max="60"></div>
-              <input type="range" id="sl-h" min="0.5" max="45" step="0.2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-gray-600">현재 남은 점수</span>
+              <span id="score-display" class="rounded-full px-2.5 py-0.5 text-xs font-extrabold tabular-nums bg-emerald-100 text-emerald-800">100점</span>
             </div>
           </div>
         </div>
 
-        <!-- 피부색 / 선색상 & 눈 깜빡임 즉시 테스트 -->
-        <div class="color-bar">
-          <div class="color-group">
-            <input type="color" id="skin-picker" value="#fff1eb" title="피부색 (눈/입 덮기용)">
-            <span>피부색</span>
-            <input type="color" id="line-picker" value="#463239" title="선/속눈썹 색상" style="margin-left:6px;">
-            <span>선색상</span>
+        <!-- 우측: 보조 힌트 & 고위험 스포일러 힌트 그리드 -->
+        <div class="sub-surface rounded-xl p-4 flex-1 flex flex-col justify-between gap-3">
+          <div class="flex items-center justify-between border-b border-gray-200 pb-2">
+            <span class="text-[13px] font-extrabold text-gray-800">추가 단서 & 결정적 힌트</span>
+            <span class="text-[11px] font-semibold text-red-500">⚠️ 붉은 테두리 힌트는 대량 감점 주의!</span>
           </div>
-          <button id="test-blink-btn" style="background:#3a3a52; color:#fff; border:none; padding:5px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold;">
-            👁️ 눈감기 상태 고정 테스트
+
+          <!-- 3x3 그리드 힌트 -->
+          <div id="right-grid-container" class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 my-auto"></div>
+
+          <div class="border-t border-gray-200 my-1"></div>
+
+          <!-- 하단 스페셜 대사 힌트 -->
+          <div id="special-hint-container" class="w-full"></div>
+        </div>
+
+      </div>
+
+      <!-- 정답 입력 바 -->
+      <div class="sub-surface rounded-xl p-3.5 flex flex-col items-center gap-3">
+        <form id="guess-form" class="w-full max-w-lg flex flex-col sm:flex-row gap-2">
+          <div class="relative flex-1">
+            <input 
+              id="guess-input" 
+              list="apostle-datalist" 
+              type="text" 
+              autocomplete="off"
+              placeholder="사도 이름 입력" 
+              class="w-full h-10 px-3.5 rounded-lg bg-white border border-gray-300 text-sm font-bold text-center focus:outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-200"
+            >
+            <datalist id="apostle-datalist"></datalist>
+          </div>
+          <div class="flex justify-center gap-2">
+            <button id="submit-btn" type="submit" class="h-10 px-6 rounded-lg bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm transition-colors cursor-pointer shrink-0">
+              제출
+            </button>
+            <button id="giveup-btn" type="button" class="h-10 px-4 rounded-lg bg-white hover:bg-gray-100 border border-gray-300 text-gray-700 font-semibold text-sm transition-colors cursor-pointer shrink-0">
+              포기
+            </button>
+          </div>
+        </form>
+
+        <!-- 피드백 메시지 & 오답 비교 기록 -->
+        <div id="feedback-msg" class="text-xs font-bold hidden"></div>
+        <div id="wrong-guesses-log" class="w-full max-w-2xl flex flex-col gap-1.5"></div>
+      </div>
+
+      <!-- 라운드 종료 결과 모달 영역 -->
+      <div id="round-result-box" class="hidden rounded-xl p-5 bg-violet-50 border-2 border-violet-300 flex-col items-center text-center gap-3 animate-pop">
+        <div id="result-title" class="text-lg font-black text-violet-950"></div>
+        <div id="result-desc" class="text-sm text-gray-700 font-medium"></div>
+        <div class="flex gap-2 mt-1">
+          <button id="next-round-btn" type="button" class="px-5 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm cursor-pointer transition-colors">
+            다음 문제로 ▶
           </button>
         </div>
-
-        <!-- 피부 패치 방식 & 스포이드 -->
-        <div class="skin-tools">
-          <select id="skin-mode" title="눈/입을 덮을 때 피부를 칠하는 방식">
-            <option value="smart">🪄 스마트 번짐 (주변 피부 보간)</option>
-            <option value="solid">■ 단색 채우기</option>
-          </select>
-          <button id="eyedrop-btn" class="mini-btn" title="캔버스의 피부 부분을 클릭해 피부색 추출">💧 스포이드</button>
-          <button id="screen-eyedrop-btn" class="mini-btn" style="display:none;" title="화면 어디서든 색 추출 (Chrome/Edge)">🖥️ 화면 스포이드</button>
-          <span id="eyedrop-swatch" class="swatch" style="display:none;"></span>
-        </div>
-        <div class="erase-row">
-          <label for="erase-scale" title="베이스에서 눈/입을 지우는 범위. 눈 가장자리 윤곽선이 남아 보이면 키우세요">지움 범위</label>
-          <input type="range" id="erase-scale" min="100" max="170" step="1" value="115">
-          <span id="erase-val">115%</span>
-        </div>
-        <div id="tool-hint" class="tool-hint"></div>
-
-        <!-- 8개 파츠 직접 업로드 -->
-        <div class="parts-tools">
-          <button id="bulk-upload-btn" class="mini-btn" title="파일명이 01~08로 시작하면 해당 슬롯에 자동 배정">📤 여러 장 한번에 업로드</button>
-          <button id="reset-custom-btn" class="mini-btn">↺ 업로드 초기화</button>
-          <input type="file" id="bulk-input" accept="image/png,image/webp,image/jpeg" multiple hidden>
-        </div>
-        <div class="parts-export-grid" id="export-grid"></div>
       </div>
 
-      <!-- [탭 2] 마이크 & OBS 방송 컨트롤 -->
-      <div id="tab-mic" class="tab-content">
-        <div class="btn-row">
-          <button id="start-btn" class="btn btn-green">🎙️ 마이크 연결 시작</button>
-          <button class="btn btn-orange" onclick="toggleStreamMode()">📺 방송 모드 (H)</button>
-        </div>
-
-        <div class="control-row">
-          <div class="label-flex">
-            <span>방송 모드 배경색</span>
-            <select id="bg-select" style="background:#161622; color:#fff; border:1px solid #444; padding:5px 8px; border-radius:6px; font-size:12px;">
-              <option value="bg-transparent">투명 (OBS 브라우저 소스용)</option>
-              <option value="bg-green">크로마키 그린 (#00FF00)</option>
-              <option value="bg-blue">크로마키 블루 (#0000FF)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="control-row">
-          <div class="label-flex">
-            <span>실시간 음성 에너지 (RMS)</span>
-            <span id="vol-num">0%</span>
-          </div>
-          <div class="meter-box">
-            <div class="meter-bar" id="volume-bar"></div>
-            <div class="marker marker-base" id="line-1" style="left: 15%;"></div>
-            <div class="marker marker-sub" id="line-2" style="left: 38%;"></div>
-            <div class="marker marker-sub" id="line-3" style="left: 65%;"></div>
-          </div>
-        </div>
-
-        <div class="control-row">
-          <div class="label-flex">
-            <label for="threshold-slider">노이즈 컷 (최소 반응 기준선)</label>
-            <span id="threshold-val">15%</span>
-          </div>
-          <input type="range" id="threshold-slider" min="2" max="60" value="15">
-        </div>
-
-        <div class="control-row">
-          <div class="label-flex">
-            <label for="gain-slider">마이크 입력 증폭</label>
-            <span id="gain-val">1.0x</span>
-          </div>
-          <input type="range" id="gain-slider" min="0.2" max="3.0" step="0.1" value="1.0">
-        </div>
-      </div>
     </div>
-  </div>
+  </main>
 
-  <script src="data.js"></script>
-  <script src="detect.js"></script>
-  <script src="script.js"></script>
+  <script>
+    function getKoreanInitials(str) {
+      const CHOSUNG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+      return Array.from(str).map(char => {
+        const code = char.charCodeAt(0) - 0xAC00;
+        if (code >= 0 && code <= 11171) {
+          return CHOSUNG[Math.floor(code / 588)];
+        }
+        return char;
+      }).join('');
+    }
+
+    const LEFT_HINTS = [
+      { key: "personality", label: "성격", cost: 2 },
+      { key: "race", label: "종족", cost: 2 },
+      { key: "row", label: "배치 열", cost: 2 },
+      { key: "role", label: "역할군", cost: 2 },
+      { key: "attackType", label: "공격 타입", cost: 2 },
+      { key: "grade", label: "태생 등급", cost: 3 }
+    ];
+
+    const RIGHT_GRID_HINTS = [
+      { key: "weapon", label: "사도 칭호", cost: 5, danger: false },
+      { key: "favFood", label: "최애 음식", cost: 4, danger: false },
+      { key: "hateFood", label: "극혐 음식", cost: 4, danger: false },
+      { key: "colors", label: "컬러 팔레트", cost: 6, danger: false },
+      { key: "trait", label: "사도 소개 요약", cost: 15, danger: true },
+      { key: "aside", label: "어사이드", cost: 25, danger: true },
+      { key: "lowSkill", label: "저학년 스킬", cost: 25, danger: true },
+      { key: "highSkill", label: "고학년 스킬", cost: 25, danger: true },
+      { key: "initials", label: "이름 초성", cost: 50, danger: true }
+    ];
+
+    const SILHOUETTE_COST = 30;
+    const SPECIAL_HINT = { key: "quote", label: "결정적 대표 대사 공개", cost: 35 };
+
+    const DB = Array.isArray(window.APOSTLE_DB) ? window.APOSTLE_DB : [];
+    let totalRounds = 5;
+    let questionQueue = [];
+    let currentRound = 0;
+    let currentApostle = null;
+    let freeCoins = 6;
+    let currentScore = 100;
+    let wrongCount = 0;
+    let openedHints = new Set();
+    let roundScores = [];
+    let isRoundOver = false;
+
+    function hasValidData(apostle, key) {
+      if (key === "initials") return true;
+      if (key === "colors") return Array.isArray(apostle.colors) && apostle.colors.length > 0;
+      const val = apostle[key];
+      return val !== undefined && val !== null && String(val).trim() !== "";
+    }
+
+    function initGame() {
+      if (DB.length === 0) {
+        document.getElementById("db-status-badge").textContent = "⚠️ 사도 데이터를 찾을 수 없습니다";
+        return;
+      }
+
+      DB.forEach(a => {
+        if (!a.initials || a.initials.trim() === "") {
+          a.initials = getKoreanInitials(a.name);
+        }
+      });
+
+      totalRounds = Math.min(5, DB.length);
+      document.getElementById("db-status-badge").textContent = `연동 완료: 총 ${DB.length}명`;
+
+      const shuffled = [...DB].sort(() => Math.random() - 0.5);
+      questionQueue = shuffled.slice(0, totalRounds);
+      currentRound = 0;
+      roundScores = [];
+      
+      const datalist = document.getElementById("apostle-datalist");
+      datalist.innerHTML = DB.map(a => `<option value="${a.name}">`).join("");
+
+      startRound();
+    }
+
+    function startRound() {
+      currentApostle = questionQueue[currentRound];
+      freeCoins = 6;
+      currentScore = 100;
+      wrongCount = 0;
+      openedHints.clear();
+      isRoundOver = false;
+
+      document.getElementById("guess-input").value = "";
+      document.getElementById("guess-input").disabled = false;
+      document.getElementById("submit-btn").disabled = false;
+      document.getElementById("giveup-btn").disabled = false;
+      document.getElementById("feedback-msg").classList.add("hidden");
+      document.getElementById("wrong-guesses-log").innerHTML = "";
+      document.getElementById("round-result-box").classList.add("hidden");
+      document.getElementById("round-result-box").classList.remove("flex");
+
+      updateHeaderIndicators();
+      updateScoreDisplay();
+      renderSilhouetteBox();
+      renderLeftHints();
+      renderRightGridHints();
+      renderSpecialHint();
+    }
+
+    function spendCost(cost) {
+      if (freeCoins >= cost) {
+        freeCoins -= cost;
+      } else {
+        const remainCost = cost - freeCoins;
+        freeCoins = 0;
+        currentScore = Math.max(0, currentScore - remainCost);
+      }
+      updateScoreDisplay();
+
+      if (currentScore <= 0) {
+        endRound(false, "점수가 0점이 되어 라운드가 종료되었습니다!");
+      }
+    }
+
+    function applyWrongPenalty() {
+      wrongCount++;
+      const penalty = 5 * Math.ceil(wrongCount / 2);
+      currentScore = Math.max(0, currentScore - penalty);
+      updateScoreDisplay();
+      return penalty;
+    }
+
+    function renderSilhouetteBox() {
+      const canvas = document.getElementById("silhouette-canvas");
+      const btn = document.getElementById("silhouette-btn");
+      const btnLabel = document.getElementById("silhouette-btn-label");
+      const btnSub = document.getElementById("silhouette-btn-sub");
+      const hasImg = hasValidData(currentApostle, "imageUrl");
+      const isSilhouetteOpened = openedHints.has("silhouette");
+
+      if (!hasImg && !isRoundOver) {
+        canvas.innerHTML = `<div class="text-gray-300 select-none text-xs font-bold text-center px-2">이미지 없음</div>`;
+        btn.disabled = true;
+        btnLabel.innerHTML = `👤 초상화 이미지 없음`;
+        btnSub.textContent = `등록된 이미지 경로가 없습니다`;
+        btn.classList.remove("hidden");
+        return;
+      }
+
+      btn.disabled = false;
+      btnLabel.innerHTML = `👤 실루엣 공개 <span class="text-red-600 font-black">-${SILHOUETTE_COST}점</span>`;
+      btnSub.textContent = `클릭 시 사도 초상화 그림자 표시`;
+
+      if (isRoundOver) {
+        canvas.innerHTML = hasImg
+          ? `<div class="reveal-mode flex flex-col items-center"><img src="${currentApostle.imageUrl}" alt="${currentApostle.name}" class="h-24 w-24 object-contain" onerror="this.style.display='none'"><span class="text-xs font-black text-violet-900 mt-1">${currentApostle.name}</span></div>`
+          : `<div class="flex flex-col items-center"><span class="text-lg font-black text-violet-900">${currentApostle.name}</span></div>`;
+        btn.classList.add("hidden");
+      } else if (isSilhouetteOpened) {
+        canvas.innerHTML = `<img src="${currentApostle.imageUrl}" alt="실루엣" class="h-28 w-28 object-contain silhouette-mode animate-pop" onerror="this.parentElement.innerHTML='이미지 로드 실패'">`;
+        btn.classList.add("hidden");
+      } else {
+        canvas.innerHTML = `<div class="text-gray-300 select-none text-5xl font-black">?</div>`;
+        btn.classList.remove("hidden");
+      }
+    }
+
+    document.getElementById("silhouette-btn").addEventListener("click", () => {
+      if (openedHints.has("silhouette") || isRoundOver || !hasValidData(currentApostle, "imageUrl")) return;
+      openedHints.add("silhouette");
+      spendCost(SILHOUETTE_COST);
+      renderSilhouetteBox();
+    });
+
+    function updateHeaderIndicators() {
+      const container = document.getElementById("round-indicators");
+      container.innerHTML = "";
+      for (let i = 0; i < totalRounds; i++) {
+        const bar = document.createElement("span");
+        bar.className = `h-1.5 w-4 rounded-full transition-colors ${
+          i < currentRound ? "bg-violet-400" : i === currentRound ? "bg-violet-600" : "bg-gray-200"
+        }`;
+        container.appendChild(bar);
+      }
+      document.getElementById("round-text").textContent = `${currentRound + 1}/${totalRounds}`;
+
+      const avg = roundScores.length > 0
+        ? Math.round(roundScores.reduce((a, b) => a + b, 0) / roundScores.length)
+        : 0;
+      document.getElementById("avg-badge").textContent = `AVG ${avg}점`;
+    }
+
+    function updateScoreDisplay() {
+      const coinEl = document.getElementById("free-coin-display");
+      const scoreEl = document.getElementById("score-display");
+      
+      coinEl.textContent = `${freeCoins} / 6`;
+      scoreEl.textContent = `${currentScore}점`;
+    }
+
+    function renderLeftHints() {
+      const container = document.getElementById("left-hints-container");
+      container.innerHTML = "";
+
+      LEFT_HINTS.forEach(hint => {
+        const isOpened = openedHints.has(hint.key);
+        const valid = hasValidData(currentApostle, hint.key);
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.disabled = isOpened || isRoundOver || !valid;
+        btn.className = "hint-btn flex w-full items-center justify-between px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-left cursor-pointer disabled:cursor-default";
+
+        let rightContent = "";
+        if (!valid) {
+          rightContent = `<span class="text-[11px] text-gray-400">미입력</span>`;
+        } else if (isOpened) {
+          const val = currentApostle[hint.key];
+          const badgeClass = hint.key === "personality" ? `badge-${val}` : "bg-violet-50 text-violet-800 border border-violet-200";
+          rightContent = `<span class="px-2 py-0.5 rounded-md text-xs font-extrabold ${badgeClass} animate-pop">${val}</span>`;
+        } else {
+          rightContent = `<span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-bold text-emerald-700">🔒 -${hint.cost}</span>`;
+        }
+
+        btn.innerHTML = `<span class="text-xs font-bold text-gray-700">${hint.label}</span>${rightContent}`;
+        btn.addEventListener("click", () => {
+          if (isOpened || isRoundOver || !valid) return;
+          openedHints.add(hint.key);
+          spendCost(hint.cost);
+          renderLeftHints();
+        });
+        container.appendChild(btn);
+      });
+    }
+
+    function renderRightGridHints() {
+      const container = document.getElementById("right-grid-container");
+      container.innerHTML = "";
+
+      RIGHT_GRID_HINTS.forEach(hint => {
+        const isOpened = openedHints.has(hint.key);
+        const valid = hasValidData(currentApostle, hint.key);
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.disabled = isOpened || isRoundOver || !valid;
+
+        const baseBorder = !valid ? "border-gray-200 bg-gray-50 opacity-60" : isOpened ? "border-violet-300 bg-violet-50/40" : hint.danger ? "border-red-200 bg-white danger-hint" : "border-gray-200 bg-white";
+        btn.className = `hint-btn min-h-[82px] p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer disabled:cursor-default ${baseBorder}`;
+
+        if (!valid) {
+          btn.innerHTML = `<span class="text-xs font-bold text-gray-400">${hint.label}</span><span class="text-[11px] text-gray-400">(미입력)</span>`;
+        } else if (isOpened) {
+          let valHtml = "";
+          if (hint.key === "colors") {
+            const swatches = currentApostle.colors.map(c => `<span class="w-5 h-5 rounded-full border border-gray-300 shadow-xs inline-block" style="background-color:${c}"></span>`).join("");
+            valHtml = `<div class="flex items-center gap-1.5 mt-0.5 animate-pop">${swatches}</div>`;
+          } else {
+            valHtml = `<span class="text-xs font-extrabold text-violet-950 break-keep leading-tight animate-pop">${currentApostle[hint.key]}</span>`;
+          }
+          btn.innerHTML = `<span class="text-[11px] font-semibold text-gray-400">${hint.label}</span>${valHtml}`;
+        } else {
+          const costBadgeClass = hint.danger ? "bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded-full" : "text-gray-500";
+          btn.innerHTML = `<span class="text-xs font-bold ${hint.danger ? 'text-gray-800' : 'text-gray-700'}">${hint.label}</span><span class="inline-flex items-center gap-0.5 text-[11px] font-extrabold ${costBadgeClass}">🔒 -${hint.cost}점</span>`;
+        }
+
+        btn.addEventListener("click", () => {
+          if (isOpened || isRoundOver || !valid) return;
+          openedHints.add(hint.key);
+          spendCost(hint.cost);
+          renderRightGridHints();
+        });
+        container.appendChild(btn);
+      });
+    }
+
+    function renderSpecialHint() {
+      const container = document.getElementById("special-hint-container");
+      const isOpened = openedHints.has(SPECIAL_HINT.key);
+      const valid = hasValidData(currentApostle, SPECIAL_HINT.key);
+
+      container.innerHTML = "";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.disabled = isOpened || isRoundOver || !valid;
+      btn.className = `hint-btn danger-hint w-full min-h-[64px] px-4 py-3 rounded-xl bg-white border flex flex-col items-center justify-center gap-1 cursor-pointer disabled:cursor-default ${!valid ? "border-gray-200 bg-gray-50 opacity-60" : isOpened ? "border-amber-300 bg-amber-50/40" : "border-red-200"}`;
+
+      if (!valid) {
+        btn.innerHTML = `<span class="text-xs font-bold text-gray-400">${SPECIAL_HINT.label}</span><span class="text-[11px] text-gray-400">(대사 미입력)</span>`;
+      } else if (isOpened) {
+        btn.innerHTML = `<span class="text-[11px] font-bold text-amber-700">💬 사도 대표 대사</span><span class="text-sm font-extrabold text-gray-900 animate-pop">"${currentApostle.quote}"</span>`;
+      } else {
+        btn.innerHTML = `<span class="text-xs font-extrabold text-gray-800">🔒 ${SPECIAL_HINT.label} <span class="text-red-600">(-${SPECIAL_HINT.cost}점)</span></span><span class="text-[11px] text-gray-400">클릭 시 대사 확인 (대량 감점 주의)</span>`;
+      }
+
+      btn.addEventListener("click", () => {
+        if (isOpened || isRoundOver || !valid) return;
+        openedHints.add(SPECIAL_HINT.key);
+        spendCost(SPECIAL_HINT.cost);
+        renderSpecialHint();
+      });
+      container.appendChild(btn);
+    }
+
+    document.getElementById("guess-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (isRoundOver) return;
+
+      const inputEl = document.getElementById("guess-input");
+      const guessName = inputEl.value.trim();
+      if (!guessName) return;
+      inputEl.value = "";
+
+      if (guessName === currentApostle.name) {
+        endRound(true, `정답입니다! 숨겨진 사도는 [${currentApostle.name}]였습니다!`);
+        return;
+      }
+
+      const penalty = applyWrongPenalty();
+      const feedbackEl = document.getElementById("feedback-msg");
+      feedbackEl.classList.remove("hidden");
+      feedbackEl.className = "text-xs font-bold text-red-600 animate-pop";
+      feedbackEl.textContent = `❌ [${guessName}] 오답입니다! (-${penalty}점 차감)`;
+
+      const guessedApostle = DB.find(a => a.name === guessName);
+      const logContainer = document.getElementById("wrong-guesses-log");
+      const logItem = document.createElement("div");
+      logItem.className = "flex flex-wrap items-center justify-between gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 text-xs animate-pop";
+
+      if (guessedApostle) {
+        const checkMatch = (key, label) => {
+          const isMatch = guessedApostle[key] === currentApostle[key];
+          return `<span class="px-2 py-0.5 rounded font-bold ${isMatch ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-gray-100 text-gray-400"}">${label}: ${guessedApostle[key]} ${isMatch ? "⭕" : "❌"}</span>`;
+        };
+        logItem.innerHTML = `<span class="font-extrabold text-gray-800">${guessName}</span><div class="flex flex-wrap gap-1">${checkMatch("personality", "성격")}${checkMatch("race", "종족")}${checkMatch("row", "열")}${checkMatch("role", "역할")}${checkMatch("attackType", "공격")}</div>`;
+      } else {
+        logItem.innerHTML = `<span class="font-bold text-gray-600">${guessName}</span><span class="text-gray-400 text-[11px]">DB에 없는 이름입니다</span>`;
+      }
+      logContainer.prepend(logItem);
+
+      if (currentScore <= 0) {
+        endRound(false, "점수가 모두 소진되어 게임 오버되었습니다!");
+      }
+    });
+
+    document.getElementById("giveup-btn").addEventListener("click", () => {
+      if (isRoundOver) return;
+      currentScore = 0;
+      updateScoreDisplay();
+      endRound(false, `문제를 포기했습니다. 정답은 [${currentApostle.name}]였습니다.`);
+    });
+
+    function endRound(isWin, message) {
+      isRoundOver = true;
+      const finalScore = isWin ? currentScore : 0;
+      roundScores.push(finalScore);
+
+      LEFT_HINTS.forEach(h => { if (hasValidData(currentApostle, h.key)) openedHints.add(h.key); });
+      RIGHT_GRID_HINTS.forEach(h => { if (hasValidData(currentApostle, h.key)) openedHints.add(h.key); });
+      if (hasValidData(currentApostle, SPECIAL_HINT.key)) openedHints.add(SPECIAL_HINT.key);
+      if (hasValidData(currentApostle, "imageUrl")) openedHints.add("silhouette");
+
+      renderSilhouetteBox();
+      renderLeftHints();
+      renderRightGridHints();
+      renderSpecialHint();
+
+      document.getElementById("guess-input").disabled = true;
+      document.getElementById("submit-btn").disabled = true;
+      document.getElementById("giveup-btn").disabled = true;
+      updateHeaderIndicators();
+
+      const resultBox = document.getElementById("round-result-box");
+      const titleEl = document.getElementById("result-title");
+      const descEl = document.getElementById("result-desc");
+      const nextBtn = document.getElementById("next-round-btn");
+
+      resultBox.classList.remove("hidden");
+      resultBox.classList.add("flex");
+
+      if (currentRound + 1 < totalRounds) {
+        titleEl.textContent = isWin ? `🎉 정답! (${finalScore}점 획득)` : `💦 아쉽네요! (0점)`;
+        descEl.textContent = message;
+        nextBtn.textContent = `다음 문제로 (${currentRound + 2}/${totalRounds}) ▶`;
+        nextBtn.onclick = () => {
+          currentRound++;
+          startRound();
+        };
+      } else {
+        const totalAvg = Math.round(roundScores.reduce((a, b) => a + b, 0) / totalRounds);
+        titleEl.textContent = `🏆 ${totalRounds}라운드 종료! 최종 평균: ${totalAvg}점`;
+        descEl.innerHTML = `${message}<br><span class="text-xs text-violet-700 font-bold mt-1 inline-block">라운드별 점수: ${roundScores.join("점 / ")}점</span>`;
+        nextBtn.textContent = "📋 결과 복사 & 다시 시작하기";
+        nextBtn.onclick = () => {
+          const shareText = `[트릭컬 사도 스무고개]\n최종 평균: ${totalAvg}점\n기록: ${roundScores.join(" / ")}점`;
+          navigator.clipboard?.writeText(shareText);
+          alert("결과가 클립보드에 복사되었습니다!");
+          initGame();
+        };
+      }
+    }
+
+    document.getElementById("reset-game-btn").addEventListener("click", () => {
+      if (confirm("처음부터 다시 시작할까요?")) {
+        initGame();
+      }
+    });
+
+    window.addEventListener("DOMContentLoaded", initGame);
+  </script>
 </body>
 </html>
