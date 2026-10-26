@@ -266,13 +266,11 @@
     function maskApostleName(text, apostleName) {
       if (!text || !apostleName) return text;
       let masked = String(text);
-      // 예: "코미(수영복)" -> "코미(수영복)", "코미" 둘 다 마스킹 대상에 포함
       const baseName = apostleName.replace(/\s*\(.*?\)\s*/g, "").trim();
       const targets = [apostleName.trim()];
       if (baseName && baseName !== apostleName.trim()) {
         targets.push(baseName);
       }
-      // 긴 이름부터 먼저 치환
       targets.sort((a, b) => b.length - a.length);
       for (const t of targets) {
         if (!t) continue;
@@ -330,10 +328,7 @@
     let roundScores = [];
     let isRoundOver = false;
 
-    // ===== 사도 이미지에서 대표색 추출 (개선 버전) =====
-    // 1) RGB → HSL 변환으로 피부색/볼홍조/살구색/갈색 음영 필터링
-    // 2) 단순 면적 비례가 아닌 고채도 포인트 컬러 우선 추출
-    // 3) 기존 data.js에 등록된 사도 고유색(c)을 보존하여 대표성 유지
+    // ===== 머리색·의상색·장신구색만 추출하는 전용 알고리즘 (얼굴 영역 원천 차단 마스킹) =====
     const paletteCache = {};
 
     function rgbToHsl(r, g, b) {
@@ -350,37 +345,49 @@
         }
         h *= 60;
       }
-      return { h, s, l }; // h: 0~360, s: 0~1, l: 0~1
+      return { h, s, l };
     }
 
-    // 트릭컬 특유의 피부색 / 볼홍조 / 연한 붉은갈색(피부 음영) 판별
-    function isSkinOrBlush(r, g, b, h, s, l) {
-      // 1) 너무 밝은 살구색/아이보리 피부톤 (명도가 높고 붉은기~노란기 계열)
-      if (l > 0.72 && h >= 5 && h <= 48 && s < 0.65) return true;
-      // 2) 일반적인 중간 피부톤 & 볼 홍조 (적색~주황 계열, 적당한 명도와 중저채도)
-      if (l > 0.55 && l <= 0.85 && (h >= 345 || h <= 38) && s >= 0.15 && s <= 0.58 && r > g && g >= b) return true;
-      // 3) 피부 그림자 / 연한 붉은갈색 (다야 등에서 뽑히던 얼굴/머리카락 그림자 톤)
-      if (l >= 0.35 && l <= 0.70 && h >= 5 && h <= 32 && s >= 0.18 && s <= 0.52) return true;
+    // 피부톤·살구색·볼홍조·피부 음영(적갈색/황갈색)인지 엄격하게 판별하여 무조건 버림
+    function isSkinOrBlushStrict(r, g, b, h, s, l) {
+      // 살구, 피치, 주황, 노랑, 분홍 계열 중 피부로 판정되는 조건
+      const isWarm = (h >= 5 && h <= 50) || (h >= 335);
+      if (isWarm) {
+        // 명도가 높거나 중간 명이면서 채도가 지나치게 높지 않은 피부/홍조 톤 차단
+        if (l >= 0.52 && s <= 0.85) return true;
+        // 붉은갈색/황갈색 피부 그림자 차단
+        if (l >= 0.28 && l <= 0.70 && s <= 0.65 && r > g) return true;
+      }
+      // 일반적인 인간 피부 RGB 특성 감지 (Red가 Green보다 확실히 크고 Blue가 적은 중간톤)
+      if (r > g + 10 && g >= b && l > 0.35 && l < 0.88 && s < 0.65) {
+        return true;
+      }
       return false;
     }
 
     function hexToRgbObj(hexStr) {
-      const clean = hexStr.replace("#", "").trim();
+      if (!hexStr) return null;
+      const clean = String(hexStr).replace("#", "").trim();
       if (clean.length !== 6) return null;
       const num = parseInt(clean, 16);
       if (isNaN(num)) return null;
       return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
     }
 
+    function hueDistance(h1, h2) {
+      const d = Math.abs(h1 - h2);
+      return Math.min(d, 360 - d);
+    }
+
     function extractPalette(url, baseColors = [], count = 3) {
-      const cacheKey = url + "_" + (baseColors.join(","));
+      const cacheKey = url + "_strict_hair_cloth_" + (baseColors.join(","));
       if (paletteCache[cacheKey]) return paletteCache[cacheKey];
 
       paletteCache[cacheKey] = new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
           try {
-            const MAX = 80;
+            const MAX = 96;
             const scale = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
             const w = Math.max(1, Math.round(img.naturalWidth * scale));
             const h = Math.max(1, Math.round(img.naturalHeight * scale));
@@ -391,73 +398,101 @@
             const px = ctx.getImageData(0, 0, w, h).data;
 
             const bins = {};
-            for (let i = 0; i < px.length; i += 4) {
-              if (px[i + 3] < 220) continue; // 반투명 외곽선 제외
-              const r = px[i], g = px[i + 1], b = px[i + 2];
-              const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-              if (mx < 45) continue;  // 검은 외곽선/그림자 제외
-              if (mn > 230) continue; // 순백색 하이라이트 제외
+            for (let y = 0; y < h; y++) {
+              const ny = y / h; // 0(상단) ~ 1(하단)
+              for (let x = 0; x < w; x++) {
+                const nx = x / w; // 0(좌측) ~ 1(우측)
+                const idx = (y * w + x) * 4;
+                if (px[idx + 3] < 230) continue; // 투명 제외
 
-              const { h: hue, s: sat, l: light } = rgbToHsl(r, g, b);
+                const r = px[idx], g = px[idx + 1], b = px[idx + 2];
+                const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+                if (mx < 40) continue;  // 외곽선 제외
+                if (mn > 235) continue; // 흰색 하이라이트 제외
 
-              // 피부색·볼색·붉은갈색 음영은 집계에서 제외
-              if (isSkinOrBlush(r, g, b, hue, sat, light)) continue;
+                const { h: hue, s: sat, l: light } = rgbToHsl(r, g, b);
 
-              const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
-              const bin = bins[key] || (bins[key] = { n: 0, r: 0, g: 0, b: 0 });
-              bin.n++; bin.r += r; bin.g += g; bin.b += b;
+                // 1차: 피부/볼홍조 색상 절대 차단
+                if (isSkinOrBlushStrict(r, g, b, hue, sat, light)) continue;
+
+                // 2차: [핵심 마스킹] 캐릭터 얼굴/볼따구가 위치하는 중앙 박스 영역(x: 24~76%, y: 28~72%)은
+                // 머리카락이나 옷이 아니라 얼굴 피부일 확률이 99%이므로 아예 수집 대상에서 제외합니다!
+                const isFaceCenterZone = (nx > 0.24 && nx < 0.76 && ny > 0.28 && ny < 0.72);
+                if (isFaceCenterZone) continue;
+
+                // 3차: 오직 상단(머리카락/모자), 하단(의상), 좌우 외곽(장신구/머리칼) 영역만 가중치 부여
+                let weight = 1.0;
+                if (ny <= 0.35) {
+                  weight = 3.0; // 상단 머리카락 및 모자 집중 추출
+                } else if (ny >= 0.65) {
+                  weight = 2.5; // 하단 의상 집중 추출
+                } else {
+                  weight = 1.5; // 좌우 외곽 장신구/소품
+                }
+
+                const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+                const bin = bins[key] || (bins[key] = { wSum: 0, r: 0, g: 0, b: 0 });
+                bin.wSum += weight;
+                bin.r += r * weight;
+                bin.g += g * weight;
+                bin.b += b * weight;
+              }
             }
 
             const list = Object.values(bins).map(bn => {
-              const r = bn.r / bn.n, g = bn.g / bn.n, b = bn.b / bn.n;
+              const r = bn.r / bn.wSum, g = bn.g / bn.wSum, b = bn.b / bn.wSum;
               const { h: hue, s: sat, l: light } = rgbToHsl(r, g, b);
 
-              // 면적(n)의 영향력을 줄이고(n^0.65), 채도(sat)가 높은 포인트 컬러를 강력하게 우대
-              const satWeight = sat < 0.15 ? 0.15 : Math.pow(sat, 1.8) * 3.5 + 0.3;
-              // 너무 어둡거나 너무 밝은 색보다 선명한 중간 명도(0.22~0.82) 우대
-              const lightWeight = (light > 0.22 && light < 0.82) ? 1.2 : 0.6;
+              // 채도가 높고 선명한 머리색/옷색 우선 점수
+              const satBoost = sat < 0.20 ? 0.2 : Math.pow(sat, 2.0) * 5.0 + 0.3;
+              const lightBoost = (light >= 0.20 && light <= 0.80) ? 1.3 : 0.6;
 
               return {
-                r, g, b, hue, sat,
-                score: Math.pow(bn.n, 0.65) * satWeight * lightWeight
+                r, g, b, hue, sat, light,
+                score: Math.pow(bn.wSum, 0.6) * satBoost * lightBoost
               };
             }).sort((a, b) => b.score - a.score);
 
-            const dist = (p, q) => Math.hypot(p.r - q.r, p.g - q.g, p.b - q.b);
+            const rgbDist = (p, q) => Math.hypot(p.r - q.r, p.g - q.g, p.b - q.b);
             const picked = [];
 
-            // 1순위: data.js에 정의된 공식 테마 컬러(c)가 유효하면 첫 번째 팔레트로 고정
-            // (예: 란의 보라색 #7f4aa6, 다야의 하늘회색 #a8bcc7 등 핵심 상징색 보장)
+            // data.js에 있는 고유 색상(c) 중 피부톤이 아닌 것만 1순위 반영
             for (const hexCode of baseColors) {
               const rgb = hexToRgbObj(hexCode);
               if (rgb) {
                 const { h: hue, s: sat, l: light } = rgbToHsl(rgb.r, rgb.g, rgb.b);
-                if (!isSkinOrBlush(rgb.r, rgb.g, rgb.b, hue, sat, light)) {
-                  picked.push(rgb);
+                if (!isSkinOrBlushStrict(rgb.r, rgb.g, rgb.b, hue, sat, light) && sat >= 0.30) {
+                  picked.push({ ...rgb, hue, sat, light });
                   break;
                 }
               }
             }
 
-            // 2순위: 이미지에서 추출한 고채도 포인트 컬러들 중 기존 색과 충분히 다른 색 선택
+            // 서로 다른 색상 계열(Hue 35도 이상)의 머리색·의상색·장신구색 채우기
             for (const c of list) {
               if (picked.length >= count) break;
-              if (picked.every(p => dist(p, c) > 75)) {
-                picked.push(c);
-              }
+              const isDistinct = picked.every(p => {
+                const dRgb = rgbDist(p, c);
+                const dHue = hueDistance(p.hue, c.hue);
+                if (p.sat > 0.25 && c.sat > 0.25) {
+                  return dRgb > 65 && dHue > 35;
+                }
+                return dRgb > 75;
+              });
+              if (isDistinct) picked.push(c);
             }
 
-            // 만약 필터링이 강해서 3개가 안 채워졌을 경우 거리 기준을 완화해 보충
+            // 부족한 경우 채우기
             if (picked.length < count) {
               for (const c of list) {
                 if (picked.length >= count) break;
-                if (picked.every(p => dist(p, c) > 45)) {
+                if (picked.every(p => rgbDist(p, c) > 45)) {
                   picked.push(c);
                 }
               }
             }
 
-            const hex = v => Math.round(v).toString(16).padStart(2, "0");
+            const hex = v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0");
             resolve(picked.length ? picked.map(c => "#" + hex(c.r) + hex(c.g) + hex(c.b)) : null);
           } catch (e) {
             resolve(null);
@@ -496,7 +531,6 @@
       return a;
     }
 
-    // 데이터가 비어 있어도 눌러서 "미입력"을 확인하게 하는 힌트(allowEmpty)는 항상 열 수 있음
     function isHintAvailable(apostle, hint) {
       return hint.allowEmpty || hasValidData(apostle, hint.key);
     }
@@ -724,7 +758,6 @@
             const swatches = currentApostle.colors.map(c => `<span class="${sz} rounded-full border border-gray-300 shadow-xs inline-block" style="background-color:${c}"></span>`).join("");
             valHtml = `<div class="flex items-center gap-1.5 mt-0.5 animate-pop">${swatches}</div>`;
           } else {
-            // 라운드 진행 중에는 사도 이름을 ⭕⭕로 가리고, 라운드가 종료되면 원본 표시
             const rawText = currentApostle[hint.key];
             const displayText = (isRoundOver || hint.key === "initials" || hint.key === "favFood" || hint.key === "hateFood")
               ? rawText
