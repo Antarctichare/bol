@@ -31,7 +31,8 @@
       lowSkill: c.lo || "",       // 저학년 스킬 (SP로 발동)
       highSkill: c.hi || "",     // 고학년 스킬 (쿨타임)
       aside: (c.ae && c.ae[0]) || "",
-      colors: c.c ? ["#" + c.c, "#8B5CF6"] : ["#8B5CF6", "#C4B5FD"],
+      // 실제 데이터(c)에 있는 대표 색상만 사용. 없으면 빈 배열 → 힌트가 "미입력"으로 표시됨
+      colors: c.c ? ["#" + c.c] : [],
       quote: c.t || "",
       imageUrl: "img/" + key + ".png" // 코페는 key가 "kope" → 실제 사도 ID로 맞추세요
     };

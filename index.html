@@ -136,7 +136,7 @@
       <!-- 룰 안내 영역 -->
       <div class="flex flex-col gap-1.5">
         <p class="text-gray-600 text-[13px] font-medium">
-          기본 <strong class="text-violet-700">100점</strong> + 무료 코인 <strong class="text-amber-600">6점</strong>! 좌측의 <strong class="text-emerald-700">사도 기본 프로필(저비용)</strong>을 활용해 후보를 좁히세요. 스킬·실루엣·초성 힌트는 <strong class="text-red-600">점수가 대폭 차감</strong>됩니다!
+          기본 <strong class="text-violet-700">100점</strong> + 무료 코인 <strong class="text-amber-600">10점</strong>! 좌측의 <strong class="text-emerald-700">사도 기본 프로필(저비용)</strong>을 활용해 후보를 좁히세요. 스킬·실루엣·초성 힌트는 <strong class="text-red-600">점수가 대폭 차감</strong>됩니다!
         </p>
         <div class="flex flex-wrap items-center gap-1.5 mt-0.5">
           <span class="bg-red-50 border border-red-200 text-red-700 rounded-full px-2.5 py-1 text-[11px] font-bold">스킬/어사이드/소개: -30점</span>
@@ -182,7 +182,7 @@
           <div class="border-t border-gray-200 pt-3 flex flex-col gap-1.5">
             <div class="flex items-center justify-between">
               <span class="text-xs font-semibold text-gray-600">무료 오픈 코인</span>
-              <span id="free-coin-display" class="rounded-full px-2.5 py-0.5 text-xs font-extrabold tabular-nums bg-amber-100 text-amber-800">6 / 6</span>
+              <span id="free-coin-display" class="rounded-full px-2.5 py-0.5 text-xs font-extrabold tabular-nums bg-amber-100 text-amber-800">10 / 10</span>
             </div>
             <div class="flex items-center justify-between">
               <span class="text-xs font-semibold text-gray-600">현재 남은 점수</span>
@@ -263,19 +263,19 @@
     }
 
     const LEFT_HINTS = [
-      { key: "personality", label: "성격", cost: 2 },
-      { key: "race", label: "종족", cost: 2 },
+      { key: "personality", label: "성격", cost: 4 },
+      { key: "race", label: "종족", cost: 4 },
       { key: "row", label: "배치 열", cost: 2 },
       { key: "role", label: "역할군", cost: 2 },
       { key: "attackType", label: "공격 타입", cost: 2 },
-      { key: "grade", label: "태생 등급", cost: 3 },
+      { key: "grade", label: "태생 등급", cost: 1 },
       { key: "release", label: "출시 시기", cost: 10 }
     ];
 
     const RIGHT_GRID_HINTS = [
       { key: "weapon", label: "사도 칭호", cost: 30, danger: true },
-      { key: "favFood", label: "최애 음식", cost: 2, danger: false },
-      { key: "hateFood", label: "극혐 음식", cost: 2, danger: false },
+      { key: "favFood", label: "최애 음식", cost: 1, danger: false },
+      { key: "hateFood", label: "극혐 음식", cost: 1, danger: false },
       { key: "colors", label: "컬러 팔레트", cost: 2, danger: false },
       { key: "trait", label: "사도 소개 요약", cost: 30, danger: true },
       { key: "aside", label: "어사이드", cost: 30, danger: true, allowEmpty: true },
@@ -301,12 +301,81 @@
     let questionQueue = [];
     let currentRound = 0;
     let currentApostle = null;
-    let freeCoins = 6;
+    const FREE_COINS = 10;
+    let freeCoins = FREE_COINS;
     let currentScore = 100;
     let wrongCount = 0;
     let openedHints = new Set();
     let roundScores = [];
     let isRoundOver = false;
+
+    // ===== 사도 이미지에서 대표색 추출 =====
+    // 이미지를 작게 줄여 픽셀을 색상 구간별로 모은 뒤, 채도가 높고 많이 쓰인 색부터
+    // 서로 충분히 다른 색만 골라 최대 3개를 반환합니다. (투명·검은 외곽선·흰색은 제외)
+    // 실패하면(이미지 없음 / file:// 로 직접 열어 캔버스 접근이 막힌 경우) null → 기존 데이터 색상을 그대로 사용
+    const paletteCache = {};
+    function extractPalette(url, count = 3) {
+      if (paletteCache[url]) return paletteCache[url];
+      paletteCache[url] = new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const MAX = 64;
+            const scale = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
+            const w = Math.max(1, Math.round(img.naturalWidth * scale));
+            const h = Math.max(1, Math.round(img.naturalHeight * scale));
+            const cv = document.createElement("canvas");
+            cv.width = w; cv.height = h;
+            const ctx = cv.getContext("2d", { willReadFrequently: true });
+            ctx.drawImage(img, 0, 0, w, h);
+            const px = ctx.getImageData(0, 0, w, h).data;
+
+            const bins = {};
+            for (let i = 0; i < px.length; i += 4) {
+              if (px[i + 3] < 200) continue;                 // 투명/반투명 가장자리
+              const r = px[i], g = px[i + 1], b = px[i + 2];
+              const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+              if (mx < 40) continue;                         // 검은 외곽선
+              if (mn > 228) continue;                        // 흰색
+              const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+              const bin = bins[key] || (bins[key] = { n: 0, r: 0, g: 0, b: 0 });
+              bin.n++; bin.r += r; bin.g += g; bin.b += b;
+            }
+
+            const list = Object.values(bins).map(bn => {
+              const r = bn.r / bn.n, g = bn.g / bn.n, b = bn.b / bn.n;
+              const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+              const sat = mx === 0 ? 0 : (mx - mn) / mx;
+              return { r, g, b, score: bn.n * (0.4 + sat) };  // 면적 × 채도 가중
+            }).sort((a, b) => b.score - a.score);
+
+            const dist = (p, q) => Math.hypot(p.r - q.r, p.g - q.g, p.b - q.b);
+            const picked = [];
+            for (const c of list) {
+              if (picked.every(p => dist(p, c) > 70)) picked.push(c);
+              if (picked.length >= count) break;
+            }
+            const hex = v => Math.round(v).toString(16).padStart(2, "0");
+            resolve(picked.length ? picked.map(c => "#" + hex(c.r) + hex(c.g) + hex(c.b)) : null);
+          } catch (e) {
+            resolve(null);
+          }
+        };
+        img.onerror = () => resolve(null);
+        img.src = url;
+      });
+      return paletteCache[url];
+    }
+
+    function loadPalette(apostle) {
+      if (apostle._paletteLoaded || !hasValidData(apostle, "imageUrl")) return;
+      apostle._paletteLoaded = true;
+      extractPalette(apostle.imageUrl).then(colors => {
+        if (!colors) return;
+        apostle.colors = colors;
+        if (currentApostle === apostle) renderRightGridHints();
+      });
+    }
 
     function hasValidData(apostle, key) {
       if (key === "initials") return true;
@@ -375,7 +444,8 @@
 
     function startRound() {
       currentApostle = questionQueue[currentRound];
-      freeCoins = 6;
+      loadPalette(currentApostle);
+      freeCoins = FREE_COINS;
       currentScore = 100;
       wrongCount = 0;
       openedHints.clear();
@@ -490,7 +560,7 @@
       const coinEl = document.getElementById("free-coin-display");
       const scoreEl = document.getElementById("score-display");
       
-      coinEl.textContent = `${freeCoins} / 6`;
+      coinEl.textContent = `${freeCoins} / ${FREE_COINS}`;
       scoreEl.textContent = `${currentScore}점`;
     }
 
@@ -547,7 +617,8 @@
         } else if (isOpened) {
           let valHtml = "";
           if (hint.key === "colors") {
-            const swatches = currentApostle.colors.map(c => `<span class="w-5 h-5 rounded-full border border-gray-300 shadow-xs inline-block" style="background-color:${c}"></span>`).join("");
+            const sz = currentApostle.colors.length > 1 ? "w-6 h-6" : "w-8 h-8";
+            const swatches = currentApostle.colors.map(c => `<span class="${sz} rounded-full border border-gray-300 shadow-xs inline-block" style="background-color:${c}"></span>`).join("");
             valHtml = `<div class="flex items-center gap-1.5 mt-0.5 animate-pop">${swatches}</div>`;
           } else {
             valHtml = hasValidData(currentApostle, hint.key)
