@@ -262,6 +262,27 @@
       }).join('');
     }
 
+    // 사도 본명(및 괄호 제외 원본 이름)을 글자 수만큼 '⭕'로 가려주는 함수
+    function maskApostleName(text, apostleName) {
+      if (!text || !apostleName) return text;
+      let masked = String(text);
+      // 예: "코미(수영복)" -> "코미(수영복)", "코미" 둘 다 마스킹 대상에 포함
+      const baseName = apostleName.replace(/\s*\(.*?\)\s*/g, "").trim();
+      const targets = [apostleName.trim()];
+      if (baseName && baseName !== apostleName.trim()) {
+        targets.push(baseName);
+      }
+      // 긴 이름부터 먼저 치환
+      targets.sort((a, b) => b.length - a.length);
+      for (const t of targets) {
+        if (!t) continue;
+        const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const replacement = "⭕".repeat(t.length);
+        masked = masked.replace(new RegExp(escaped, "g"), replacement);
+      }
+      return masked;
+    }
+
     const LEFT_HINTS = [
       { key: "personality", label: "성격", cost: 4 },
       { key: "race", label: "종족", cost: 4 },
@@ -703,8 +724,14 @@
             const swatches = currentApostle.colors.map(c => `<span class="${sz} rounded-full border border-gray-300 shadow-xs inline-block" style="background-color:${c}"></span>`).join("");
             valHtml = `<div class="flex items-center gap-1.5 mt-0.5 animate-pop">${swatches}</div>`;
           } else {
+            // 라운드 진행 중에는 사도 이름을 ⭕⭕로 가리고, 라운드가 종료되면 원본 표시
+            const rawText = currentApostle[hint.key];
+            const displayText = (isRoundOver || hint.key === "initials" || hint.key === "favFood" || hint.key === "hateFood")
+              ? rawText
+              : maskApostleName(rawText, currentApostle.name);
+
             valHtml = hasValidData(currentApostle, hint.key)
-              ? `<span class="text-xs font-extrabold text-violet-950 break-keep leading-tight animate-pop">${currentApostle[hint.key]}</span>`
+              ? `<span class="text-xs font-extrabold text-violet-950 break-keep leading-tight animate-pop">${displayText}</span>`
               : `<span class="text-xs font-bold text-gray-400 animate-pop">미입력</span>`;
           }
           btn.innerHTML = `<span class="text-[11px] font-semibold text-gray-400">${hint.label}</span>${valHtml}`;
