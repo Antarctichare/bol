@@ -106,6 +106,7 @@
           <span class="text-3xl">🔥</span>
           <span class="text-base font-extrabold text-red-900">하드모드</span>
           <span class="text-xs font-medium text-gray-500">무작위 5명 · 오답 비교 정보 없음</span>
+          <span class="text-xs font-extrabold text-red-600">무료 코인 5개</span>
         </button>
       </div>
 
@@ -367,8 +368,10 @@
     let currentRound = 0;
     let currentApostle = null;
     let roundWon = false;
-    const FREE_COINS = 10;
+    const FREE_COINS = 10;       // 일반 모드 무료 코인
+    const HARD_FREE_COINS = 5;    // 하드모드 무료 코인
     let freeCoins = FREE_COINS;
+    let roundFreeCoinLimit = FREE_COINS;
     let currentScore = 100;
     let wrongCount = 0;
     let openedHints = new Set();
@@ -641,7 +644,8 @@
     function startRound() {
       currentApostle = questionQueue[currentRound];
       loadPalette(currentApostle);
-      freeCoins = FREE_COINS;
+      roundFreeCoinLimit = gameMode === "hard" ? HARD_FREE_COINS : FREE_COINS;
+      freeCoins = roundFreeCoinLimit;
       currentScore = 100;
       wrongCount = 0;
       roundWon = false;
@@ -766,7 +770,7 @@
       const coinEl = document.getElementById("free-coin-display");
       const scoreEl = document.getElementById("score-display");
       
-      coinEl.textContent = `${freeCoins} / ${FREE_COINS}`;
+      coinEl.textContent = `${freeCoins} / ${roundFreeCoinLimit}`;
       scoreEl.textContent = `${currentScore}점`;
     }
 
