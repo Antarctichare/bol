@@ -19,20 +19,21 @@
       personality: PERSONALITY[c.pe] || "",
       // 데이터에 없는 항목은 빈 값으로 둡니다 (index.html이 빈 값 힌트는 자동 제외)
       race: c.r || "",
-      row: "",
-      role: "",
+      row: c.rw || "",
+      role: c.rl || "",
       attackType: c.at === 1 ? "물리" : c.at === 2 ? "마법" : "",
       grade: c.gr || "",
+      release: c.rel || "",
       weapon: c.t || "",          // 사도 칭호
       favFood: "",
       hateFood: "",
       trait: c.d ? c.d.split("\n")[0].trim() : "",
-      lowSkill: c.lo || "",       // 4학년 해금 스킬(SP 사용)
-      highSkill: c.hi || "",      // 8학년 해금 스킬(쿨타임)
+      lowSkill: c.lo || "",       // 저학년 스킬 (SP로 발동)
+      highSkill: c.hi || "",     // 고학년 스킬 (쿨타임)
       aside: (c.ae && c.ae[0]) || "",
       colors: c.c ? ["#" + c.c, "#8B5CF6"] : ["#8B5CF6", "#C4B5FD"],
       quote: c.t || "",
-      imageUrl: "img/" + key + ".png"
+      imageUrl: "img/" + key + ".png" // 코페는 key가 "kope" → 실제 사도 ID로 맞추세요
     };
   });
 
