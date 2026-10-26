@@ -278,7 +278,7 @@
       { key: "hateFood", label: "극혐 음식", cost: 2, danger: false },
       { key: "colors", label: "컬러 팔레트", cost: 2, danger: false },
       { key: "trait", label: "사도 소개 요약", cost: 30, danger: true },
-      { key: "aside", label: "어사이드", cost: 30, danger: true },
+      { key: "aside", label: "어사이드", cost: 30, danger: true, allowEmpty: true },
       { key: "lowSkill", label: "저학년 스킬", cost: 30, danger: true },
       { key: "highSkill", label: "고학년 스킬", cost: 30, danger: true },
       { key: "initials", label: "이름 초성", cost: 50, danger: true }
@@ -322,6 +322,11 @@
         [a[i], a[j]] = [a[j], a[i]];
       }
       return a;
+    }
+
+    // 데이터가 비어 있어도 눌러서 "미입력"을 확인하게 하는 힌트(allowEmpty)는 항상 열 수 있음
+    function isHintAvailable(apostle, hint) {
+      return hint.allowEmpty || hasValidData(apostle, hint.key);
     }
 
     function initGame() {
@@ -529,7 +534,7 @@
 
       RIGHT_GRID_HINTS.forEach(hint => {
         const isOpened = openedHints.has(hint.key);
-        const valid = hasValidData(currentApostle, hint.key);
+        const valid = isHintAvailable(currentApostle, hint);
         const btn = document.createElement("button");
         btn.type = "button";
         btn.disabled = isOpened || isRoundOver || !valid;
@@ -545,7 +550,9 @@
             const swatches = currentApostle.colors.map(c => `<span class="w-5 h-5 rounded-full border border-gray-300 shadow-xs inline-block" style="background-color:${c}"></span>`).join("");
             valHtml = `<div class="flex items-center gap-1.5 mt-0.5 animate-pop">${swatches}</div>`;
           } else {
-            valHtml = `<span class="text-xs font-extrabold text-violet-950 break-keep leading-tight animate-pop">${currentApostle[hint.key]}</span>`;
+            valHtml = hasValidData(currentApostle, hint.key)
+              ? `<span class="text-xs font-extrabold text-violet-950 break-keep leading-tight animate-pop">${currentApostle[hint.key]}</span>`
+              : `<span class="text-xs font-bold text-gray-400 animate-pop">미입력</span>`;
           }
           btn.innerHTML = `<span class="text-[11px] font-semibold text-gray-400">${hint.label}</span>${valHtml}`;
         } else {
@@ -617,7 +624,7 @@
       roundScores.push(finalScore);
 
       LEFT_HINTS.forEach(h => { if (hasValidData(currentApostle, h.key)) openedHints.add(h.key); });
-      RIGHT_GRID_HINTS.forEach(h => { if (hasValidData(currentApostle, h.key)) openedHints.add(h.key); });
+      RIGHT_GRID_HINTS.forEach(h => { if (isHintAvailable(currentApostle, h)) openedHints.add(h.key); });
       if (hasValidData(currentApostle, "imageUrl")) openedHints.add("silhouette");
 
       renderSilhouetteBox();
