@@ -309,18 +309,57 @@
     let roundScores = [];
     let isRoundOver = false;
 
-    // ===== 사도 이미지에서 대표색 추출 =====
-    // 이미지를 작게 줄여 픽셀을 색상 구간별로 모은 뒤, 채도가 높고 많이 쓰인 색부터
-    // 서로 충분히 다른 색만 골라 최대 3개를 반환합니다. (투명·검은 외곽선·흰색은 제외)
-    // 실패하면(이미지 없음 / file:// 로 직접 열어 캔버스 접근이 막힌 경우) null → 기존 데이터 색상을 그대로 사용
+    // ===== 사도 이미지에서 대표색 추출 (개선 버전) =====
+    // 1) RGB → HSL 변환으로 피부색/볼홍조/살구색/갈색 음영 필터링
+    // 2) 단순 면적 비례가 아닌 고채도 포인트 컬러 우선 추출
+    // 3) 기존 data.js에 등록된 사도 고유색(c)을 보존하여 대표성 유지
     const paletteCache = {};
-    function extractPalette(url, count = 3) {
-      if (paletteCache[url]) return paletteCache[url];
-      paletteCache[url] = new Promise((resolve) => {
+
+    function rgbToHsl(r, g, b) {
+      r /= 255; g /= 255; b /= 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      let h = 0, s = 0, l = (max + min) / 2;
+      if (max !== min) {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+          case r: h = ((g - b) / d + (g < b ? 6 : 0)); break;
+          case g: h = ((b - r) / d + 2); break;
+          case b: h = ((r - g) / d + 4); break;
+        }
+        h *= 60;
+      }
+      return { h, s, l }; // h: 0~360, s: 0~1, l: 0~1
+    }
+
+    // 트릭컬 특유의 피부색 / 볼홍조 / 연한 붉은갈색(피부 음영) 판별
+    function isSkinOrBlush(r, g, b, h, s, l) {
+      // 1) 너무 밝은 살구색/아이보리 피부톤 (명도가 높고 붉은기~노란기 계열)
+      if (l > 0.72 && h >= 5 && h <= 48 && s < 0.65) return true;
+      // 2) 일반적인 중간 피부톤 & 볼 홍조 (적색~주황 계열, 적당한 명도와 중저채도)
+      if (l > 0.55 && l <= 0.85 && (h >= 345 || h <= 38) && s >= 0.15 && s <= 0.58 && r > g && g >= b) return true;
+      // 3) 피부 그림자 / 연한 붉은갈색 (다야 등에서 뽑히던 얼굴/머리카락 그림자 톤)
+      if (l >= 0.35 && l <= 0.70 && h >= 5 && h <= 32 && s >= 0.18 && s <= 0.52) return true;
+      return false;
+    }
+
+    function hexToRgbObj(hexStr) {
+      const clean = hexStr.replace("#", "").trim();
+      if (clean.length !== 6) return null;
+      const num = parseInt(clean, 16);
+      if (isNaN(num)) return null;
+      return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+    }
+
+    function extractPalette(url, baseColors = [], count = 3) {
+      const cacheKey = url + "_" + (baseColors.join(","));
+      if (paletteCache[cacheKey]) return paletteCache[cacheKey];
+
+      paletteCache[cacheKey] = new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
           try {
-            const MAX = 64;
+            const MAX = 80;
             const scale = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
             const w = Math.max(1, Math.round(img.naturalWidth * scale));
             const h = Math.max(1, Math.round(img.naturalHeight * scale));
@@ -332,11 +371,17 @@
 
             const bins = {};
             for (let i = 0; i < px.length; i += 4) {
-              if (px[i + 3] < 200) continue;                 // 투명/반투명 가장자리
+              if (px[i + 3] < 220) continue; // 반투명 외곽선 제외
               const r = px[i], g = px[i + 1], b = px[i + 2];
               const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-              if (mx < 40) continue;                         // 검은 외곽선
-              if (mn > 228) continue;                        // 흰색
+              if (mx < 45) continue;  // 검은 외곽선/그림자 제외
+              if (mn > 230) continue; // 순백색 하이라이트 제외
+
+              const { h: hue, s: sat, l: light } = rgbToHsl(r, g, b);
+
+              // 피부색·볼색·붉은갈색 음영은 집계에서 제외
+              if (isSkinOrBlush(r, g, b, hue, sat, light)) continue;
+
               const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
               const bin = bins[key] || (bins[key] = { n: 0, r: 0, g: 0, b: 0 });
               bin.n++; bin.r += r; bin.g += g; bin.b += b;
@@ -344,17 +389,53 @@
 
             const list = Object.values(bins).map(bn => {
               const r = bn.r / bn.n, g = bn.g / bn.n, b = bn.b / bn.n;
-              const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-              const sat = mx === 0 ? 0 : (mx - mn) / mx;
-              return { r, g, b, score: bn.n * (0.4 + sat) };  // 면적 × 채도 가중
+              const { h: hue, s: sat, l: light } = rgbToHsl(r, g, b);
+
+              // 면적(n)의 영향력을 줄이고(n^0.65), 채도(sat)가 높은 포인트 컬러를 강력하게 우대
+              const satWeight = sat < 0.15 ? 0.15 : Math.pow(sat, 1.8) * 3.5 + 0.3;
+              // 너무 어둡거나 너무 밝은 색보다 선명한 중간 명도(0.22~0.82) 우대
+              const lightWeight = (light > 0.22 && light < 0.82) ? 1.2 : 0.6;
+
+              return {
+                r, g, b, hue, sat,
+                score: Math.pow(bn.n, 0.65) * satWeight * lightWeight
+              };
             }).sort((a, b) => b.score - a.score);
 
             const dist = (p, q) => Math.hypot(p.r - q.r, p.g - q.g, p.b - q.b);
             const picked = [];
-            for (const c of list) {
-              if (picked.every(p => dist(p, c) > 70)) picked.push(c);
-              if (picked.length >= count) break;
+
+            // 1순위: data.js에 정의된 공식 테마 컬러(c)가 유효하면 첫 번째 팔레트로 고정
+            // (예: 란의 보라색 #7f4aa6, 다야의 하늘회색 #a8bcc7 등 핵심 상징색 보장)
+            for (const hexCode of baseColors) {
+              const rgb = hexToRgbObj(hexCode);
+              if (rgb) {
+                const { h: hue, s: sat, l: light } = rgbToHsl(rgb.r, rgb.g, rgb.b);
+                if (!isSkinOrBlush(rgb.r, rgb.g, rgb.b, hue, sat, light)) {
+                  picked.push(rgb);
+                  break;
+                }
+              }
             }
+
+            // 2순위: 이미지에서 추출한 고채도 포인트 컬러들 중 기존 색과 충분히 다른 색 선택
+            for (const c of list) {
+              if (picked.length >= count) break;
+              if (picked.every(p => dist(p, c) > 75)) {
+                picked.push(c);
+              }
+            }
+
+            // 만약 필터링이 강해서 3개가 안 채워졌을 경우 거리 기준을 완화해 보충
+            if (picked.length < count) {
+              for (const c of list) {
+                if (picked.length >= count) break;
+                if (picked.every(p => dist(p, c) > 45)) {
+                  picked.push(c);
+                }
+              }
+            }
+
             const hex = v => Math.round(v).toString(16).padStart(2, "0");
             resolve(picked.length ? picked.map(c => "#" + hex(c.r) + hex(c.g) + hex(c.b)) : null);
           } catch (e) {
@@ -364,13 +445,14 @@
         img.onerror = () => resolve(null);
         img.src = url;
       });
-      return paletteCache[url];
+      return paletteCache[cacheKey];
     }
 
     function loadPalette(apostle) {
       if (apostle._paletteLoaded || !hasValidData(apostle, "imageUrl")) return;
       apostle._paletteLoaded = true;
-      extractPalette(apostle.imageUrl).then(colors => {
+      const baseColors = Array.isArray(apostle.colors) ? apostle.colors : [];
+      extractPalette(apostle.imageUrl, baseColors).then(colors => {
         if (!colors) return;
         apostle.colors = colors;
         if (currentApostle === apostle) renderRightGridHints();
