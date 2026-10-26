@@ -25,8 +25,8 @@
       grade: c.gr || "",
       release: c.rel || "",
       weapon: c.t || "",          // 사도 칭호
-      favFood: "",
-      hateFood: "",
+      favFood: c.fv || "",         // 매우 좋아함 (취향표의 업그레이드 요리명)
+      hateFood: (c.fh || []).join(" / "), // 싫어함 2종
       trait: c.d ? c.d.split("\n")[0].trim() : "",
       lowSkill: c.lo || "",       // 저학년 스킬 (SP로 발동)
       highSkill: c.hi || "",     // 고학년 스킬 (쿨타임)
