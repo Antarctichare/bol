@@ -91,7 +91,7 @@
         <p class="text-sm text-gray-500 font-medium">힌트를 적게 열수록 높은 점수! 모드를 선택하세요.</p>
       </div>
 
-      <div class="grid sm:grid-cols-3 gap-3 w-full max-w-4xl">
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full max-w-6xl">
         <button id="mode-five-btn" type="button" class="hint-btn flex flex-col items-center gap-1.5 px-4 py-6 rounded-2xl bg-white border-2 border-violet-200 cursor-pointer">
           <span class="text-3xl">🎯</span>
           <span class="text-base font-extrabold text-violet-950">5명 맞추기</span>
@@ -104,9 +104,15 @@
         </button>
         <button id="mode-hard-btn" type="button" class="hint-btn flex flex-col items-center gap-1.5 px-4 py-6 rounded-2xl bg-white border-2 border-red-200 cursor-pointer">
           <span class="text-3xl">🔥</span>
-          <span class="text-base font-extrabold text-red-900">하드모드</span>
+          <span class="text-base font-extrabold text-red-900">하드모드 · 5명</span>
           <span class="text-xs font-medium text-gray-500">무작위 5명 · 오답 비교 정보 없음</span>
           <span class="text-xs font-extrabold text-red-600">무료 코인 5개</span>
+        </button>
+        <button id="mode-hard-all-btn" type="button" class="hint-btn flex flex-col items-center gap-1.5 px-4 py-6 rounded-2xl bg-white border-2 border-red-300 cursor-pointer">
+          <span class="text-3xl">🔥📚</span>
+          <span class="text-base font-extrabold text-red-900">하드모드 · 전체 사도</span>
+          <span id="mode-hard-all-desc" class="text-xs font-medium text-gray-500">전체 사도 · 실패 정보 비공개</span>
+          <span class="text-xs font-extrabold text-red-600">무료 코인 5개 / 라운드</span>
         </button>
       </div>
 
@@ -372,6 +378,9 @@
     const HARD_FREE_COINS = 5;    // 하드모드 무료 코인
     let freeCoins = FREE_COINS;
     let roundFreeCoinLimit = FREE_COINS;
+    function isHardMode() {
+      return gameMode === "hard" || gameMode === "hardAll";
+    }
     let currentScore = 100;
     let wrongCount = 0;
     let openedHints = new Set();
@@ -591,6 +600,7 @@
         document.getElementById("mode-five-btn").disabled = true;
         document.getElementById("mode-all-btn").disabled = true;
         document.getElementById("mode-hard-btn").disabled = true;
+        document.getElementById("mode-hard-all-btn").disabled = true;
         return;
       }
 
@@ -604,6 +614,7 @@
 
       document.getElementById("db-status-badge").textContent = `사도 ${DB.length}명 · 별명 ${aliasToName.size}개 인식`;
       document.getElementById("mode-all-desc").textContent = `전체 ${DB.length}명 · 원할 때 종료 가능`;
+      document.getElementById("mode-hard-all-desc").textContent = `전체 ${DB.length}명 · 실패 정보 비공개`;
 
       // 자동완성에는 data.js의 사도 본명만 넣습니다. 별명은 직접 입력하면 정답 판정에서 확인합니다.
       const datalist = document.getElementById("apostle-datalist");
@@ -617,6 +628,7 @@
       document.getElementById("mode-five-btn").addEventListener("click", () => startGame("five"));
       document.getElementById("mode-all-btn").addEventListener("click", () => startGame("all"));
       document.getElementById("mode-hard-btn").addEventListener("click", () => startGame("hard"));
+      document.getElementById("mode-hard-all-btn").addEventListener("click", () => startGame("hardAll"));
       showMenu();
     }
 
@@ -630,7 +642,8 @@
     function startGame(mode) {
       if (DB.length === 0) return;
       gameMode = mode;
-      totalRounds = mode === "all" ? DB.length : Math.min(5, DB.length);
+      const isAllMode = mode === "all" || mode === "hardAll";
+      totalRounds = isAllMode ? DB.length : Math.min(5, DB.length);
       questionQueue = shuffle(DB).slice(0, totalRounds);
       currentRound = 0;
       roundScores = [];
@@ -644,7 +657,7 @@
     function startRound() {
       currentApostle = questionQueue[currentRound];
       loadPalette(currentApostle);
-      roundFreeCoinLimit = gameMode === "hard" ? HARD_FREE_COINS : FREE_COINS;
+      roundFreeCoinLimit = isHardMode() ? HARD_FREE_COINS : FREE_COINS;
       freeCoins = roundFreeCoinLimit;
       currentScore = 100;
       wrongCount = 0;
@@ -713,7 +726,7 @@
       btnLabel.innerHTML = `👤 실루엣 공개 <span class="text-red-600 font-black">-${SILHOUETTE_COST}점</span>`;
       btnSub.textContent = `클릭 시 사도 초상화 그림자 표시`;
 
-      if (isRoundOver && gameMode === "hard" && !roundWon) {
+      if (isRoundOver && isHardMode() && !roundWon) {
         // 하드모드에서 실패하면 정답 초상화/이름을 공개하지 않습니다.
         if (isSilhouetteOpened && hasImg) {
           canvas.innerHTML = `<img src="${currentApostle.imageUrl}" alt="실루엣" class="h-28 w-28 object-contain silhouette-mode">`;
@@ -832,7 +845,7 @@
             valHtml = `<div class="flex items-center gap-1.5 mt-0.5 animate-pop">${swatches}</div>`;
           } else {
             const rawText = currentApostle[hint.key];
-            const revealText = isRoundOver && (gameMode !== "hard" || roundWon);
+            const revealText = isRoundOver && (!isHardMode() || roundWon);
             const displayText = (revealText || hint.key === "initials" || hint.key === "favFood" || hint.key === "hateFood")
               ? rawText
               : maskApostleName(rawText, currentApostle.name);
@@ -874,7 +887,7 @@
 
       const penalty = applyWrongPenalty();
 
-      if (gameMode !== "hard") {
+      if (!isHardMode()) {
         const feedbackEl = document.getElementById("feedback-msg");
         feedbackEl.classList.remove("hidden");
         feedbackEl.className = "text-xs font-bold text-red-600 animate-pop";
@@ -918,7 +931,7 @@
       roundWon = isWin;
       const finalScore = isWin ? currentScore : 0;
       roundScores.push(finalScore);
-      const revealSolution = gameMode !== "hard" || isWin;
+      const revealSolution = !isHardMode() || isWin;
       const resultMessage = revealSolution
         ? message
         : "하드모드에서 실패했습니다. 정답과 추가 정보는 공개되지 않습니다.";
@@ -958,7 +971,7 @@
           currentRound++;
           startRound();
         };
-        if (gameMode === "all") {
+        if (gameMode === "all" || gameMode === "hardAll") {
           finishBtn.classList.remove("hidden");
           finishBtn.onclick = () => showFinalSummary("여기까지 플레이한 결과예요!");
         } else {
@@ -981,7 +994,8 @@
       const nextBtn = document.getElementById("next-round-btn");
       document.getElementById("finish-btn").classList.add("hidden");
 
-      const detail = gameMode === "all"
+      const isAllMode = gameMode === "all" || gameMode === "hardAll";
+      const detail = isAllMode
         ? `정답 ${wins} / ${played}`
         : `라운드별 점수: ${roundScores.join("점 / ")}점`;
 
@@ -992,8 +1006,15 @@
 
       nextBtn.textContent = "📋 결과 복사 & 모드 선택으로";
       nextBtn.onclick = () => {
-        const modeName = gameMode === "all" ? "전체 사도" : gameMode === "hard" ? "하드모드(5명)" : "5명";
-        const shareText = `[트릭컬 사도 스무고개 · ${modeName}]\n최종 평균: ${totalAvg}점 (${g.label})\n${gameMode === "all" ? detail : "기록: " + roundScores.join(" / ") + "점"}`;
+        const modeName = gameMode === "all"
+          ? "전체 사도"
+          : gameMode === "hardAll"
+            ? "하드모드 전체 사도"
+            : gameMode === "hard"
+              ? "하드모드(5명)"
+              : "5명";
+        const isAllMode = gameMode === "all" || gameMode === "hardAll";
+        const shareText = `[트릭컬 사도 스무고개 · ${modeName}]\n최종 평균: ${totalAvg}점 (${g.label})\n${isAllMode ? detail : "기록: " + roundScores.join(" / ") + "점"}`;
         navigator.clipboard?.writeText(shareText);
         alert("결과가 클립보드에 복사되었습니다!");
         showMenu();
