@@ -30,7 +30,10 @@
       trait: c.d ? c.d.split("\n")[0].trim() : "",
       lowSkill: c.lo || "",       // 저학년 스킬 (SP로 발동)
       highSkill: c.hi || "",     // 고학년 스킬 (쿨타임)
-      aside: (c.ae && c.ae[0]) || "",
+      // 어사이드: a1·a2·a3의 이름(n). 어사이드가 없는 사도는 빈 값 → 힌트 비활성
+      aside1: (c.a1 && c.a1.n) || "",
+      aside2: (c.a2 && c.a2.n) || "",
+      aside3: (c.a3 && c.a3.n) || "",
       // 실제 데이터(c)에 있는 대표 색상만 사용. 없으면 빈 배열 → 힌트가 "미입력"으로 표시됨
       colors: c.c ? ["#" + c.c] : [],
       quote: c.t || "",

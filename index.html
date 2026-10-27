@@ -152,7 +152,7 @@
           기본 <strong class="text-violet-700">100점</strong> + 무료 코인 <strong class="text-amber-600">10점</strong>! 좌측의 <strong class="text-emerald-700">사도 기본 프로필(저비용)</strong>을 활용해 후보를 좁히세요. 스킬·실루엣·초성 힌트는 <strong class="text-red-600">점수가 대폭 차감</strong>됩니다!
         </p>
         <div class="flex flex-wrap items-center gap-1.5 mt-0.5">
-          <span class="bg-red-50 border border-red-200 text-red-700 rounded-full px-2.5 py-1 text-[11px] font-bold">스킬/어사이드/소개: -30점</span>
+          <span class="bg-red-50 border border-red-200 text-red-700 rounded-full px-2.5 py-1 text-[11px] font-bold">스킬/소개: -30점 / 어사이드: 각 -25점</span>
           <span class="bg-red-50 border border-red-200 text-red-700 rounded-full px-2.5 py-1 text-[11px] font-bold">실루엣: -50점 / 칭호: -30점 / 초성: -50점</span>
           <span class="sub-surface text-gray-600 rounded-full px-2.5 py-1 text-[11px] font-semibold">오답 -5점부터 가중 감점</span>
         </div>
@@ -310,7 +310,9 @@
       { key: "hateFood", label: "극혐 음식", cost: 1, danger: false },
       { key: "colors", label: "컬러 팔레트", cost: 2, danger: false },
       { key: "trait", label: "사도 소개 요약", cost: 30, danger: true },
-      { key: "aside", label: "어사이드", cost: 30, danger: true, allowEmpty: true },
+      { key: "aside1", label: "어사이드 1", cost: 25, danger: true },
+      { key: "aside2", label: "어사이드 2", cost: 25, danger: true },
+      { key: "aside3", label: "어사이드 3", cost: 25, danger: true },
       { key: "lowSkill", label: "저학년 스킬", cost: 30, danger: true },
       { key: "highSkill", label: "고학년 스킬", cost: 30, danger: true },
       { key: "initials", label: "이름 초성", cost: 50, danger: true }
