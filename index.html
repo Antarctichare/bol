@@ -310,9 +310,9 @@
       { key: "hateFood", label: "극혐 음식", cost: 1, danger: false },
       { key: "colors", label: "컬러 팔레트", cost: 2, danger: false },
       { key: "trait", label: "사도 소개 요약", cost: 30, danger: true },
-      { key: "aside1", label: "어사이드 1", cost: 25, danger: true },
-      { key: "aside2", label: "어사이드 2", cost: 25, danger: true },
-      { key: "aside3", label: "어사이드 3", cost: 25, danger: true },
+      { key: "aside1", label: "어사이드 A1", cost: 25, danger: true, allowEmpty: true },
+      { key: "aside2", label: "어사이드 A2", cost: 25, danger: true, allowEmpty: true },
+      { key: "aside3", label: "어사이드 A3", cost: 25, danger: true, allowEmpty: true },
       { key: "lowSkill", label: "저학년 스킬", cost: 30, danger: true },
       { key: "highSkill", label: "고학년 스킬", cost: 30, danger: true },
       { key: "initials", label: "이름 초성", cost: 50, danger: true }
@@ -390,7 +390,7 @@
     let roundWinCount = 0;
     let isRoundOver = false;
 
-    // ===== 머리색·의상색·장신구색만 추출하는 전용 알고리즘 (얼굴 영역 원천 차단 마스킹) =====
+    // ===== 머리색·의상색·장신구색만 추출하는 알고리즘 =====
     const paletteCache = {};
 
     function rgbToHsl(r, g, b) {
@@ -410,17 +410,12 @@
       return { h, s, l };
     }
 
-    // 피부톤·살구색·볼홍조·피부 음영(적갈색/황갈색)인지 엄격하게 판별하여 무조건 버림
     function isSkinOrBlushStrict(r, g, b, h, s, l) {
-      // 살구, 피치, 주황, 노랑, 분홍 계열 중 피부로 판정되는 조건
       const isWarm = (h >= 5 && h <= 50) || (h >= 335);
       if (isWarm) {
-        // 명도가 높거나 중간 명이면서 채도가 지나치게 높지 않은 피부/홍조 톤 차단
         if (l >= 0.52 && s <= 0.85) return true;
-        // 붉은갈색/황갈색 피부 그림자 차단
         if (l >= 0.28 && l <= 0.70 && s <= 0.65 && r > g) return true;
       }
-      // 일반적인 인간 피부 RGB 특성 감지 (Red가 Green보다 확실히 크고 Blue가 적은 중간톤)
       if (r > g + 10 && g >= b && l > 0.35 && l < 0.88 && s < 0.65) {
         return true;
       }
@@ -461,35 +456,31 @@
 
             const bins = {};
             for (let y = 0; y < h; y++) {
-              const ny = y / h; // 0(상단) ~ 1(하단)
+              const ny = y / h;
               for (let x = 0; x < w; x++) {
-                const nx = x / w; // 0(좌측) ~ 1(우측)
+                const nx = x / w;
                 const idx = (y * w + x) * 4;
-                if (px[idx + 3] < 230) continue; // 투명 제외
+                if (px[idx + 3] < 230) continue;
 
                 const r = px[idx], g = px[idx + 1], b = px[idx + 2];
                 const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-                if (mx < 40) continue;  // 외곽선 제외
-                if (mn > 235) continue; // 흰색 하이라이트 제외
+                if (mx < 40) continue;
+                if (mn > 235) continue;
 
                 const { h: hue, s: sat, l: light } = rgbToHsl(r, g, b);
 
-                // 1차: 피부/볼홍조 색상 절대 차단
                 if (isSkinOrBlushStrict(r, g, b, hue, sat, light)) continue;
 
-                // 2차: [핵심 마스킹] 캐릭터 얼굴/볼따구가 위치하는 중앙 박스 영역(x: 24~76%, y: 28~72%)은
-                // 머리카락이나 옷이 아니라 얼굴 피부일 확률이 99%이므로 아예 수집 대상에서 제외합니다!
                 const isFaceCenterZone = (nx > 0.24 && nx < 0.76 && ny > 0.28 && ny < 0.72);
                 if (isFaceCenterZone) continue;
 
-                // 3차: 오직 상단(머리카락/모자), 하단(의상), 좌우 외곽(장신구/머리칼) 영역만 가중치 부여
                 let weight = 1.0;
                 if (ny <= 0.35) {
-                  weight = 3.0; // 상단 머리카락 및 모자 집중 추출
+                  weight = 3.0;
                 } else if (ny >= 0.65) {
-                  weight = 2.5; // 하단 의상 집중 추출
+                  weight = 2.5;
                 } else {
-                  weight = 1.5; // 좌우 외곽 장신구/소품
+                  weight = 1.5;
                 }
 
                 const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
@@ -505,7 +496,6 @@
               const r = bn.r / bn.wSum, g = bn.g / bn.wSum, b = bn.b / bn.wSum;
               const { h: hue, s: sat, l: light } = rgbToHsl(r, g, b);
 
-              // 채도가 높고 선명한 머리색/옷색 우선 점수
               const satBoost = sat < 0.20 ? 0.2 : Math.pow(sat, 2.0) * 5.0 + 0.3;
               const lightBoost = (light >= 0.20 && light <= 0.80) ? 1.3 : 0.6;
 
@@ -518,7 +508,6 @@
             const rgbDist = (p, q) => Math.hypot(p.r - q.r, p.g - q.g, p.b - q.b);
             const picked = [];
 
-            // data.js에 있는 고유 색상(c) 중 피부톤이 아닌 것만 1순위 반영
             for (const hexCode of baseColors) {
               const rgb = hexToRgbObj(hexCode);
               if (rgb) {
@@ -530,7 +519,6 @@
               }
             }
 
-            // 서로 다른 색상 계열(Hue 35도 이상)의 머리색·의상색·장신구색 채우기
             for (const c of list) {
               if (picked.length >= count) break;
               const isDistinct = picked.every(p => {
@@ -544,7 +532,6 @@
               if (isDistinct) picked.push(c);
             }
 
-            // 부족한 경우 채우기
             if (picked.length < count) {
               for (const c of list) {
                 if (picked.length >= count) break;
@@ -619,7 +606,6 @@
       document.getElementById("mode-all-desc").textContent = `전체 ${DB.length}명 · 원할 때 종료 가능`;
       document.getElementById("mode-hard-all-desc").textContent = `전체 ${DB.length}명 · 실패 정보 비공개`;
 
-      // 자동완성에는 data.js의 사도 본명만 넣습니다. 별명은 직접 입력하면 정답 판정에서 확인합니다.
       const datalist = document.getElementById("apostle-datalist");
       datalist.replaceChildren();
       DB.forEach(a => {
@@ -692,7 +678,6 @@
       } else {
         const remainCost = cost - freeCoins;
         freeCoins = 0;
-        // 하드모드는 점수가 음수가 되어도 라운드가 끝나지 않습니다.
         currentScore = isHardMode() ? currentScore - remainCost : Math.max(0, currentScore - remainCost);
       }
       updateScoreDisplay();
@@ -732,7 +717,6 @@
       btnSub.textContent = `클릭 시 사도 초상화 그림자 표시`;
 
       if (isRoundOver && isHardMode() && !roundWon) {
-        // 하드모드에서 실패하면 정답 초상화/이름을 공개하지 않습니다.
         if (isSilhouetteOpened && hasImg) {
           canvas.innerHTML = `<img src="${currentApostle.imageUrl}" alt="실루엣" class="h-28 w-28 object-contain silhouette-mode">`;
         } else {
@@ -835,6 +819,8 @@
       const container = document.getElementById("right-grid-container");
       container.innerHTML = "";
 
+      const ASIDE_KEYS = ["aside1", "aside2", "aside3"];
+
       RIGHT_GRID_HINTS.forEach(hint => {
         const isOpened = openedHints.has(hint.key);
         const valid = isHintAvailable(currentApostle, hint);
@@ -853,6 +839,8 @@
             const sz = currentApostle.colors.length > 1 ? "w-6 h-6" : "w-8 h-8";
             const swatches = currentApostle.colors.map(c => `<span class="${sz} rounded-full border border-gray-300 shadow-xs inline-block" style="background-color:${c}"></span>`).join("");
             valHtml = `<div class="flex items-center gap-1.5 mt-0.5 animate-pop">${swatches}</div>`;
+          } else if (ASIDE_KEYS.includes(hint.key) && !currentApostle.hasAside) {
+            valHtml = `<span class="text-xs font-extrabold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-0.5 animate-pop">어사이드 없음</span>`;
           } else {
             const rawText = currentApostle[hint.key];
             const revealText = isRoundOver && (!isHardMode() || roundWon);
@@ -872,7 +860,13 @@
 
         btn.addEventListener("click", () => {
           if (isOpened || isRoundOver || !valid) return;
-          openedHints.add(hint.key);
+
+          if (ASIDE_KEYS.includes(hint.key) && !currentApostle.hasAside) {
+            ASIDE_KEYS.forEach(k => openedHints.add(k));
+          } else {
+            openedHints.add(hint.key);
+          }
+
           spendCost(hint.cost);
           renderRightGridHints();
         });
@@ -919,7 +913,6 @@
         }
         logContainer.prepend(logItem);
       } else {
-        // 하드모드에서는 오답 문구, 비교 결과, DB 등록 여부를 일절 표시하지 않습니다.
         document.getElementById("feedback-msg").classList.add("hidden");
         document.getElementById("wrong-guesses-log").innerHTML = "";
       }
@@ -939,7 +932,6 @@
     function endRound(isWin, message) {
       isRoundOver = true;
       roundWon = isWin;
-      // 하드모드에서 음수 점수로 맞혀도 획득 점수는 0점(포기보다 손해 보지 않도록)
       const finalScore = isWin ? Math.max(0, currentScore) : 0;
       roundScores.push(finalScore);
       if (isWin) roundWinCount++;
